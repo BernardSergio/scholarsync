@@ -1,0 +1,22 @@
+# Node.js and Flutter ignores
+
+# Node
+node_modules/
+.env
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+package-lock.json
+
+# Flutter/Dart
+build/
+.dart_tool/
+.pub-cache/
+.packages
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Do NOT ignore backend folder
+!BackEnd-AURA/**
