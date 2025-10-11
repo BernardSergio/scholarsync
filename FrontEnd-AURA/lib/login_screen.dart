@@ -1,7 +1,9 @@
 // lib/login_screen.dart
 
 import 'package:flutter/material.dart';
-import 'auth_service.dart'; // Import your AuthService
+import 'auth_service.dart';
+import 'home_screen.dart';
+import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -11,17 +13,11 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // Text controllers for input fields
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passphraseController = TextEditingController();
-
-  // State for passphrase visibility
   bool _isPassphraseVisible = false;
-
-  // Initialize AuthService
   final AuthService _authService = AuthService();
 
-  // Custom colors for theme
   final Color _auraPrimaryColor = const Color.fromARGB(255, 0, 146, 110);
   final Color _scaffoldBackgroundColor = const Color(0xFFF3F7FF);
   final Color _greyTextColor = const Color(0xFF757575);
@@ -38,12 +34,13 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // 🟢 LOGIN HANDLER
+  // --- LOGIN HANDLER ---
   Future<void> _handleLogin() async {
     final username = _usernameController.text.trim();
     final passphrase = _passphraseController.text.trim();
 
     if (username.isEmpty || passphrase.isEmpty) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill in all fields')),
       );
@@ -52,12 +49,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final result = await _authService.login(username, passphrase);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result['message'] ?? 'Login successful!')),
-      );
 
-      // TODO: Navigate to home screen after success
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result['message'] ?? 'Login failed')),
+        );
+      }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Login failed: $e')),
       );
@@ -84,7 +89,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    // AURA Header
                     Text(
                       'AURA',
                       style: TextStyle(
@@ -95,7 +99,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-
                     Text(
                       'Welcome back to your secure mental health companion',
                       textAlign: TextAlign.center,
@@ -105,20 +108,14 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 32),
-
-                    // Username Field
                     _buildTextField(
                       label: 'Username',
                       hint: 'Enter your username',
                       controller: _usernameController,
                     ),
                     const SizedBox(height: 20),
-
-                    // Passphrase Field
                     _buildPassphraseField(controller: _passphraseController),
                     const SizedBox(height: 30),
-
-                    // Sign In Button
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
@@ -141,21 +138,17 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     Text(
                       'OR',
                       style: TextStyle(
-                        color: _greyTextColor.withOpacity(0.6),
+                        color: Color.fromARGB(153, 117, 117, 117), // replaced deprecated withOpacity(0.6)
                       ),
                     ),
                     const SizedBox(height: 12),
-
-                    // Biometric Authentication Button
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
                         onPressed: () {
-                          // TODO: Implement biometric login
                         },
                         icon: Icon(Icons.fingerprint,
                             size: 24, color: _auraPrimaryColor),
@@ -174,11 +167,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-
-                    // Don't have an account? Sign up
                     TextButton(
                       onPressed: () {
-                        // TODO: Navigate to Sign Up
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                              builder: (_) => const SignupScreen()),
+                        );
                       },
                       child: Text.rich(
                         TextSpan(
@@ -197,14 +191,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-
-                    // Forgot Passphrase
                     TextButton(
                       onPressed: () {
-                        // TODO: Navigate to Forgot Passphrase screen
                       },
                       child: Text(
-                        'Forgot your passphrase?',
+                        'Forgot your Password?',
                         style: TextStyle(color: _textLinkColor),
                       ),
                     ),
@@ -218,7 +209,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // --- Helper Widgets ---
   Widget _buildTextField({
     required String label,
     required String hint,
@@ -279,7 +269,7 @@ class _LoginScreenState extends State<LoginScreen> {
           controller: controller,
           obscureText: !_isPassphraseVisible,
           decoration: InputDecoration(
-            hintText: 'Enter your secure passphrase',
+            hintText: 'Enter your Password',
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             border: OutlineInputBorder(

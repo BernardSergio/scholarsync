@@ -1,8 +1,11 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart'; 
 import 'package:http/http.dart' as http;
 
 class AuthService {
-  static const String baseUrl = "http://10.0.2.2:5000/api/auth"; 
+  static final String baseUrl = kIsWeb
+      ? "http://localhost:5000/api/auth"
+      : "http://10.0.2.2:5000/api/auth"; 
 
   Future<Map<String, dynamic>> login(String username, String password) async {
     final url = Uri.parse("$baseUrl/login");
@@ -15,7 +18,10 @@ class AuthService {
     if (response.statusCode == 200) {
       return {"success": true, "data": jsonDecode(response.body)};
     } else {
-      return {"success": false, "message": jsonDecode(response.body)["message"] ?? "Login failed"};
+      return {
+        "success": false,
+        "message": jsonDecode(response.body)["message"] ?? "Login failed"
+      };
     }
   }
 
@@ -30,7 +36,10 @@ class AuthService {
     if (response.statusCode == 200) {
       return {"success": true, "data": jsonDecode(response.body)};
     } else {
-      return {"success": false, "message": jsonDecode(response.body)["message"] ?? "Signup failed"};
+      return {
+        "success": false,
+        "message": jsonDecode(response.body)["message"] ?? "Signup failed"
+      };
     }
   }
 }
