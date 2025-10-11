@@ -10,22 +10,35 @@ const JWT_SECRET = process.env.JWT_SECRET;
 // ✅ REGISTER a new user
 export const registerUser = async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, email, number } = req.body;
 
-    if (!username || !password) {
-      return res.status(400).json({ message: "Username and password are required." });
+    // Check required fields
+    if (!username || !password || !email || !number) {
+      return res.status(400).json({ message: "All fields (username, password, email, number) are required." });
     }
 
-    const existingUser = await User.findOne({ username });
+    // Check if username or email already exists
+    const existingUser = await User.findOne({
+      $or: [{ username }, { email }],
+    });
     if (existingUser) {
-      return res.status(400).json({ message: "Username already taken." });
+      return res.status(400).json({ message: "Username or email already taken." });
     }
 
     // password will be hashed automatically by the model pre-save hook
-    const newUser = new User({ username, password });
+    const newUser = new User({ username, password, email, number });
     await newUser.save();
 
-    res.status(201).json({ message: "User registered successfully!" });
+    res.status(201).json({
+      message: "User registered successfully!",
+      user: {
+        id: newUser._id,
+        username: newUser.username,
+        email: newUser.email,
+        number: newUser.number,
+        role: newUser.role,
+      },
+    });
   } catch (err) {
     console.error("❌ Registration error:", err);
     res.status(500).json({ error: "Server error during registration." });
@@ -82,6 +95,13 @@ export const loginUser = async (req, res) => {
     res.json({
       message: "Login successful!",
       token,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        number: user.number,
+        role: user.role,
+      },
     });
   } catch (err) {
     console.error("❌ Login error:", err);
