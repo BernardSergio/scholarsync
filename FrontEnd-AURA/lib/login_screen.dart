@@ -1,9 +1,8 @@
-// lib/login_screen.dart
-
 import 'package:flutter/material.dart';
 import 'auth_service.dart';
 import 'home_screen.dart';
 import 'signup_screen.dart';
+import 'forgot_passphrase_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -34,7 +33,6 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // --- LOGIN HANDLER ---
   Future<void> _handleLogin() async {
     final username = _usernameController.text.trim();
     final passphrase = _passphraseController.text.trim();
@@ -137,35 +135,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'OR',
-                      style: TextStyle(
-                        color: Color.fromARGB(153, 117, 117, 117), // replaced deprecated withOpacity(0.6)
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                        },
-                        icon: Icon(Icons.fingerprint,
-                            size: 24, color: _auraPrimaryColor),
-                        label: Text(
-                          'Use Biometric Authentication',
-                          style: TextStyle(
-                              fontSize: 16, color: _auraPrimaryColor),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(color: _auraPrimaryColor),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                      ),
-                    ),
                     const SizedBox(height: 24),
                     TextButton(
                       onPressed: () {
@@ -193,6 +162,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 8),
                     TextButton(
                       onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const ForgotPassphraseScreen(),
+                          ),
+                        );
                       },
                       child: Text(
                         'Forgot your Password?',
