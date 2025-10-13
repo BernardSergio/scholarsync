@@ -24,7 +24,9 @@ export const registerUser = async (req, res) => {
       $or: [{ username }, { email }],
     });
     if (existingUser) {
-      return res.status(400).json({ message: "Username or email already taken." });
+      return res
+        .status(400)
+        .json({ message: "Username or email already taken." });
     }
 
     const newUser = new User({ username, password, email, number });
@@ -52,7 +54,9 @@ export const loginUser = async (req, res) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
-      return res.status(400).json({ message: "Please provide both username and password." });
+      return res
+        .status(400)
+        .json({ message: "Please provide both username and password." });
     }
 
     const user = await User.findOne({ username });
@@ -60,7 +64,11 @@ export const loginUser = async (req, res) => {
 
     if (user.isLocked && user.isLocked()) {
       const minutesLeft = Math.ceil((user.lockUntil - Date.now()) / 60000);
-      return res.status(403).json({ message: `Account locked. Try again in ${minutesLeft} minute(s).` });
+      return res
+        .status(403)
+        .json({
+          message: `Account locked. Try again in ${minutesLeft} minute(s).`,
+        });
     }
 
     const isMatch = await user.matchPassword(password);
@@ -80,7 +88,11 @@ export const loginUser = async (req, res) => {
     user.lastActive = new Date();
     await user.save();
 
-    const token = jwt.sign({ id: user._id, username: user.username }, JWT_SECRET, { expiresIn: "1h" });
+    const token = jwt.sign(
+      { id: user._id, username: user.username },
+      JWT_SECRET,
+      { expiresIn: "1h" }
+    );
 
     res.json({
       message: "Login successful!",
@@ -99,50 +111,50 @@ export const loginUser = async (req, res) => {
   }
 };
 
-// ---------------------- Forgot Password (generate token + send email) ----------------------
+// ---------------------- Forgot Password ----------------------
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
-
-    if (!email) return res.status(400).json({ success: false, message: "Email is required." });
+    if (!email)
+      return res
+        .status(400)
+        .json({ success: false, message: "Email is required." });
 
     const user = await User.findOne({ email });
 
-    // Always respond with generic message to avoid exposing which emails exist
     const genericSuccess = {
       success: true,
-      message: "If an account with that email exists, reset instructions have been sent."
+      message:
+        "If an account with that email exists, reset instructions have been sent.",
     };
 
-    if (!user) {
-      // Still return generic success
-      return res.status(200).json(genericSuccess);
-    }
+    if (!user) return res.status(200).json(genericSuccess);
 
-    // Generate a secure token (plain token to send to user)
+    // Generate and hash reset token
     const resetToken = crypto.randomBytes(32).toString("hex");
-    // Hash token for storage
     const hashedToken = crypto.createHash("sha256").update(resetToken).digest("hex");
 
-    // Save hashed token and expiry
     user.resetPasswordToken = hashedToken;
     user.resetPasswordExpires = Date.now() + 15 * 60 * 1000; // 15 minutes
     await user.save();
 
-    // Build reset URL (frontend should capture token and present reset UI)
-    const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${resetToken}`;
+    // ✅ Automatically choose frontend URL
+    const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 
-    // Configure nodemailer transporter
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS,
-        },
-        tls: {
-          rejectUnauthorized: false, 
-        },
-      });
+    // ✅ Flutter web uses hash routing (#/)
+    const resetUrl = `${FRONTEND_URL}/#/reset-password?token=${resetToken}`;
+
+    // Configure email
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
+    });
 
     const mailOptions = {
       from: `"AURA Support" <${process.env.EMAIL_USER}>`,
@@ -157,55 +169,67 @@ export const forgotPassword = async (req, res) => {
       `,
     };
 
-    // Send the email
     await transporter.sendMail(mailOptions);
-
-    // For development/testing only: log plain token (remove in production)
-    console.log("Password reset token (plain) for testing:", resetToken);
+    console.log("✅ Reset email sent to:", user.email);
+    console.log("🧩 Plain token for testing:", resetToken);
 
     return res.status(200).json(genericSuccess);
   } catch (err) {
     console.error("❌ Forgot Password Error:", err);
-    return res.status(500).json({ success: false, message: "Error processing forgot password request." });
+    return res
+      .status(500)
+      .json({
+        success: false,
+        message: "Error processing forgot password request.",
+      });
   }
 };
 
 // ---------------------- Reset Password ----------------------
-// Accepts { token, newPassword } in body
 export const resetPassword = async (req, res) => {
   try {
     const { token, newPassword } = req.body;
 
+    console.log("🔹 Received token:", token);
+
     if (!token || !newPassword) {
-      return res.status(400).json({ success: false, message: "Token and newPassword are required." });
+      return res
+        .status(400)
+        .json({ success: false, message: "Token and newPassword are required." });
     }
 
-    // Hash the provided token to compare with stored hash
     const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+    console.log("🔹 Hashed token:", hashedToken);
 
     const user = await User.findOne({
       resetPasswordToken: hashedToken,
-      resetPasswordExpires: { $gt: Date.now() }
+      resetPasswordExpires: { $gt: Date.now() },
     });
 
+    console.log("🔹 Found user:", user);
+
     if (!user) {
-      return res.status(400).json({ success: false, message: "Invalid or expired token." });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid or expired token." });
     }
 
-    // Hash the new password (if your User model doesn't already hash in pre-save)
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
     user.password = hashedPassword;
 
-    // Clear reset fields
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
 
     await user.save();
 
-    return res.status(200).json({ success: true, message: "Password has been reset successfully." });
+    return res
+      .status(200)
+      .json({ success: true, message: "Password has been reset successfully." });
   } catch (err) {
     console.error("❌ Reset Password Error:", err);
-    return res.status(500).json({ success: false, message: "Server error while resetting password." });
+    return res
+      .status(500)
+      .json({ success: false, message: "Server error while resetting password." });
   }
 };

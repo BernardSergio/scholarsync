@@ -1,3 +1,4 @@
+// lib/auth_service.dart
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -65,7 +66,7 @@ class AuthService {
     }
   }
 
-  // 🔄 FORGOT PASSWORD (FIXED)
+  // 🔄 FORGOT PASSWORD
   Future<Map<String, dynamic>> forgotPassword(String email) async {
     final url = Uri.parse("$baseUrl/forgot-password");
 
@@ -73,7 +74,7 @@ class AuthService {
       final response = await http.post(
         url,
         headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"email": email}), // ✅ FIXED key name
+        body: jsonEncode({"email": email}),
       );
 
       final body = jsonDecode(response.body);
@@ -93,6 +94,41 @@ class AuthService {
       }
     } catch (e) {
       return {"success": false, "message": "Network error: $e"};
+    }
+  }
+
+  // 🔐 RESET PASSWORD 
+  Future<Map<String, dynamic>> resetPassword(
+      String token, String newPassword) async {
+    final url = Uri.parse("$baseUrl/reset-password");
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "token": token,
+          "newPassword": newPassword,
+        }),
+      );
+
+      final body = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          "success": body["success"] ?? true,
+          "message":
+              body["message"] ?? "Password has been reset successfully."
+        };
+      } else {
+        return {
+          "success": false,
+          "message":
+              body["message"] ?? "Reset failed (${response.statusCode})"
+        };
+      }
+    } catch (e) {
+      return {"success": false, "message": "Error resetting password: $e"};
     }
   }
 }
