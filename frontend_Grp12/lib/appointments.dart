@@ -43,6 +43,9 @@ class Appointment {
 // Shared storage key for appointments (used by helper dialog and page)
 const String _appointmentsStorageKey = 'aura_appointments';
 
+// Notifier to tell other pages (Home) that appointments changed.
+final ValueNotifier<int> appointmentsNotifier = ValueNotifier<int>(0);
+
 // ...existing file continues (keep the in-file AppointmentsPage and its local dialog) ...
 
 // Public helper that shows the same scheduling dialog used in AppointmentsPage
@@ -191,6 +194,7 @@ Future<bool?> showScheduleAppointmentDialog(BuildContext context, {Appointment? 
                           final list = json.decode(raw) as List<dynamic>;
                           list.insert(0, appt.toJson());
                           await prefs.setString(_appointmentsStorageKey, json.encode(list));
+                            try { appointmentsNotifier.value = appointmentsNotifier.value + 1; } catch (_) {}
                         } catch (_) {}
                         Navigator.pop(c, true);
                       }
@@ -413,6 +417,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                             setState(() => _appointments.insert(0, appt));
                           }
                           await _saveAppointments();
+                          try { appointmentsNotifier.value = appointmentsNotifier.value + 1; } catch (_) {}
                           Navigator.pop(c, true);
                         }
                       },

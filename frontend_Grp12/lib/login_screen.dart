@@ -1,8 +1,9 @@
+
 import 'package:flutter/material.dart';
 import 'auth_service.dart';
-import 'home_screen.dart';
-import 'signup_screen.dart';
 import 'forgot_passphrase_screen.dart';
+// removed debug settings import
+
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,73 +13,53 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  // State to manage the visibility of the passphrase text
+  bool _isPassphraseVisible = false;
+  // Controllers for the text fields
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passphraseController = TextEditingController();
-  bool _isPassphraseVisible = false;
-  final AuthService _authService = AuthService();
 
-  final Color _auraPrimaryColor = const Color.fromARGB(255, 0, 146, 110);
-  final Color _scaffoldBackgroundColor = const Color(0xFFF3F7FF);
-  final Color _greyTextColor = const Color(0xFF757575);
-  final Color _textFieldBorderColor = const Color(0xFFE0E0E0);
-  final Color _textFieldFillColor = const Color(0xFFFCFCFF);
-  final Color _signInTextColor = Colors.white;
-  final Color _textLinkColor = const Color.fromARGB(255, 2, 116, 91);
-  final Color _auraHeaderColor = const Color(0xFF3DAA80);
+  // Loading state while authenticating 
+  bool _isLoading = false;
+  // Whether both fields contain text and the form can be submitted
+  bool _canSubmit = false;
 
   @override
-  void dispose() {
-    _usernameController.dispose();
-    _passphraseController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _usernameController.addListener(_updateCanSubmit);
+    _passphraseController.addListener(_updateCanSubmit);
+    _updateCanSubmit();
+    // Create a single AuthService instance for this screen so login attempts are tracked
+    _authService = AuthService();
   }
 
-  Future<void> _handleLogin() async {
-    final username = _usernameController.text.trim();
-    final passphrase = _passphraseController.text.trim();
+  late final AuthService _authService;
 
-    if (username.isEmpty || passphrase.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all fields')),
-      );
-      return;
-    }
-
-    try {
-      final result = await _authService.login(username, passphrase);
-
-      if (!mounted) return;
-
-      if (result['success'] == true) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result['message'] ?? 'Login failed')),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Login failed: $e')),
-      );
-    }
-  }
+  // Custom colors based on the new desired purple theme
+  final Color _auraPrimaryColor = const Color.fromARGB(255, 0, 146, 110); // A deep teal for buttons/links
+  final Color _scaffoldBackgroundColor = const Color(0xFFF3F7FF); // Light pale blue/white background
+  final Color _greyTextColor = const Color(0xFF757575); // For secondary text
+  final Color _textFieldBorderColor = const Color(0xFFE0E0E0); // For light borders
+  final Color _textFieldFillColor = const Color(0xFFFCFCFF); // Very light fill for text fields
+  final Color _signInTextColor = Colors.white; // Text color for the Sign In button
+  final Color _textLinkColor = const Color.fromARGB(255, 2, 116, 91); // For 'Sign up' and 'Forgot your passphrase?'
+  final Color _auraHeaderColor = const Color(0xFF3DAA80); // A green color for the AURA logo
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // Set the background color to a light color from the image
       backgroundColor: _scaffoldBackgroundColor,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 500),
+            constraints: const BoxConstraints(maxWidth: 500), // Max width for the login box
             child: Card(
+              // The Card widget creates the white, rounded container
               margin: EdgeInsets.zero,
-              elevation: 8,
+              elevation: 8, // Add some elevation for a shadow effect
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
@@ -87,16 +68,19 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
+                    // AURA Header
                     Text(
                       'AURA',
                       style: TextStyle(
                         fontFamily: 'Roboto',
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
-                        color: _auraHeaderColor,
+                        color: _auraHeaderColor, // Green color for header
                       ),
                     ),
                     const SizedBox(height: 8),
+
+                    // Companion Text
                     Text(
                       'Welcome back to your secure mental health companion',
                       textAlign: TextAlign.center,
@@ -106,42 +90,77 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 32),
+
+                    // Username Field
                     _buildTextField(
                       label: 'Username',
                       hint: 'Enter your username',
                       controller: _usernameController,
                     ),
                     const SizedBox(height: 20),
-                    _buildPassphraseField(controller: _passphraseController),
+
+                    // Secure Passphrase Field
+                    _buildPassphraseField(),
                     const SizedBox(height: 30),
+
+                    // Sign In Button
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _handleLogin,
+            onPressed: (_isLoading || !_canSubmit)
+              ? null
+              : () async {
+                                setState(() {
+                                  _isLoading = true;
+                                });
+
+                                final username = _usernameController.text.trim();
+                                final passphrase = _passphraseController.text;
+
+                                final result = await _authService.authenticate(username, passphrase);
+
+                                setState(() {
+                                  _isLoading = false;
+                                });
+
+                                if (!mounted) return;
+                                final ctx = context;
+
+                                if (result.success) {
+                                  // Navigate to home on success
+                                  Navigator.of(ctx).pushReplacementNamed('/home');
+                                } else {
+                                  ScaffoldMessenger.of(ctx).showSnackBar(
+                                    SnackBar(content: Text(result.errorMessage ?? 'Authentication failed')),
+                                  );
+                                }
+                              },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _auraPrimaryColor,
+                          backgroundColor: _auraPrimaryColor, // Dark Teal color
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          elevation: 0,
+                          elevation: 0, 
                         ),
-                        child: Text(
-                          'Sign In',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: _signInTextColor,
-                          ),
-                        ),
+                        child: _isLoading
+                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
+                            : Text(
+                                'Sign In',
+                                style: TextStyle(fontSize: 18, color: _signInTextColor),
+                              ),
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 12),
+
+                    // (Two-factor moved to Settings)
+
+                    // debug controls removed
+
+                    // Don't have an account? Sign up
                     TextButton(
                       onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                              builder: (_) => const SignupScreen()),
-                        );
+                        Navigator.of(context).pushNamed('/signup');
                       },
                       child: Text.rich(
                         TextSpan(
@@ -160,6 +179,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
+
+                    // Forgot your password?
                     TextButton(
                       onPressed: () {
                         Navigator.of(context).push(
@@ -169,7 +190,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         );
                       },
                       child: Text(
-                        'Forgot your Password?',
+                        'Forgot your password?',
                         style: TextStyle(color: _textLinkColor),
                       ),
                     ),
@@ -183,10 +204,13 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // --- Helper Widgets ---
+
   Widget _buildTextField({
     required String label,
     required String hint,
-    required TextEditingController controller,
+    TextEditingController? controller,
+    // IconData? icon, // Removed unused parameter
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -204,8 +228,8 @@ class _LoginScreenState extends State<LoginScreen> {
           controller: controller,
           decoration: InputDecoration(
             hintText: hint,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            // Add padding to the hint text and content
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: BorderSide(color: _textFieldBorderColor),
@@ -226,12 +250,12 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildPassphraseField({required TextEditingController controller}) {
+  Widget _buildPassphraseField() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Secure Passphrase',
+          'Secure Password',
           style: TextStyle(
             fontWeight: FontWeight.bold,
             color: Colors.black87,
@@ -240,12 +264,11 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         const SizedBox(height: 8),
         TextField(
-          controller: controller,
-          obscureText: !_isPassphraseVisible,
+          controller: _passphraseController,
+          obscureText: !_isPassphraseVisible, // Toggle visibility
           decoration: InputDecoration(
-            hintText: 'Enter your Password',
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            hintText: 'Enter your secure password',
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: BorderSide(color: _textFieldBorderColor),
@@ -262,9 +285,7 @@ class _LoginScreenState extends State<LoginScreen> {
             fillColor: _textFieldFillColor,
             suffixIcon: IconButton(
               icon: Icon(
-                _isPassphraseVisible
-                    ? Icons.visibility
-                    : Icons.visibility_off,
+                _isPassphraseVisible ? Icons.visibility : Icons.visibility_off,
                 color: _greyTextColor,
               ),
               onPressed: () {
@@ -277,5 +298,24 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ],
     );
+    
+  }
+
+  @override
+  void dispose() {
+    _usernameController.removeListener(_updateCanSubmit);
+    _passphraseController.removeListener(_updateCanSubmit);
+    _usernameController.dispose();
+    _passphraseController.dispose();
+    super.dispose();
+  }
+
+  void _updateCanSubmit() {
+    final can = _usernameController.text.trim().isNotEmpty && _passphraseController.text.isNotEmpty;
+    if (can != _canSubmit) {
+      setState(() {
+        _canSubmit = can;
+      });
+    }
   }
 }

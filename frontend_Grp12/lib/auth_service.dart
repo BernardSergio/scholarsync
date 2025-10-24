@@ -1,197 +1,90 @@
-// lib/auth_service.dart
-import 'dart:convert';
-import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-
 class User {
   final String username;
   final String passphrase;
 
-  User({required this.username, required this.passphrase});
+  User(this.username, this.passphrase);
+}
 
-  factory User.fromJson(Map<String, dynamic> json) => User(
-        username: json['username'] ?? '',
-        passphrase: json['passphrase'] ?? '',
-      );
+class AuthResult {
+  final bool success;
+  final User? user;
+  final String? errorMessage;
 
-  Map<String, dynamic> toJson() => {
-        'username': username,
-        'passphrase': passphrase,
-      };
+  AuthResult(this.success, {this.user, this.errorMessage});
 }
 
 class AuthService {
-  static final String baseUrl = kIsWeb
-      ? "http://localhost:5000/api/auth"
-      : "http://10.0.2.2:5000/api/auth";
+  // Singleton so the attempt counters live across the app while the process runs
+  static final AuthService _instance = AuthService._internal();
+  factory AuthService() => _instance;
+  AuthService._internal();
 
-  // 🧍‍♂️ Holds the currently logged-in user data
-  User? currentUser;
+  static const int _maxAttempts = 5;
 
-  // 🧮 Track reset password attempts (memory-based)
-  int resetAttempts = 0;
-  final int maxResetAttempts = 3;
+  // Simulated user database: {username: User_object}
+  final Map<String, User> _userDatabase = {
+    'testuser': User('testuser', 'pass123'),
+  };
 
-  // Optional: Track attempts per username
-  final Map<String, int> _userAttempts = {};
+  // Tracks failed login attempts: {username: attempt_count}
+  final Map<String, int> _loginAttempts = {};
 
-  // 🔐 LOGIN
-  Future<Map<String, dynamic>> login(String username, String password) async {
-    final url = Uri.parse("$baseUrl/login");
+  Future<AuthResult> authenticate(String username, String passphrase) async {
+    // Simulate a network delay
+    await Future.delayed(const Duration(seconds: 1));
 
-    try {
-      final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"username": username, "password": password}),
-      );
+    // Check if the user is locked out
+    if (_loginAttempts.containsKey(username) && _loginAttempts[username]! >= _maxAttempts) {
+      return AuthResult(false, errorMessage: 'Account locked due to too many failed attempts.');
+    }
 
-      final body = jsonDecode(response.body);
+    final user = _userDatabase[username];
 
-      if (response.statusCode == 200) {
-        final userData = body["user"] ?? body;
-        currentUser = User.fromJson(userData);
-        return {"success": true, "data": body};
-      } else {
-        return {
-          "success": false,
-          "message": body["message"] ?? "Login failed (${response.statusCode})"
-        };
+    if (user != null && user.passphrase == passphrase) {
+      // On success, reset attempts
+      _loginAttempts.remove(username);
+      _currentUser = user;
+      return AuthResult(true, user: user);
+    } else {
+      // On failure, increment attempts
+      final attempts = (_loginAttempts[username] ?? 0) + 1;
+      _loginAttempts[username] = attempts;
+
+      if (attempts >= _maxAttempts) {
+        return AuthResult(false, errorMessage: 'Incorrect passphrase. Your account is now locked.');
       }
-    } catch (e) {
-      return {"success": false, "message": "Network or server error: $e"};
+      final remaining = _maxAttempts - attempts;
+      return AuthResult(false, errorMessage: 'Invalid username or passphrase. $remaining attempts remaining.');
     }
   }
 
-  // 📝 SIGNUP
-  Future<Map<String, dynamic>> signup(
-      String username, String email, String number, String password) async {
-    final url = Uri.parse("$baseUrl/register");
+  User? _currentUser;
 
-    try {
-      final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "username": username,
-          "email": email,
-          "number": number,
-          "password": password,
-        }),
-      );
+  // Returns currently authenticated user, if any.
+  User? get currentUser => _currentUser;
 
-      final body = jsonDecode(response.body);
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return {"success": true, "data": body};
-      } else {
-        return {
-          "success": false,
-          "message":
-              body["message"] ?? "Signup failed (${response.statusCode})"
-        };
-      }
-    } catch (e) {
-      return {"success": false, "message": "Server error: $e"};
-    }
+  // Sign out current user
+  void signOut() {
+    _currentUser = null;
   }
 
-  // 🔄 FORGOT PASSWORD
-  Future<Map<String, dynamic>> forgotPassword(String email) async {
-    final url = Uri.parse("$baseUrl/forgot-password");
-
-    try {
-      final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"email": email}),
-      );
-
-      final body = jsonDecode(response.body);
-
-      if (response.statusCode == 200) {
-        return {
-          "success": body["success"] ?? true,
-          "message": body["message"] ??
-              "If an account exists, reset instructions were sent."
-        };
-      } else {
-        return {
-          "success": false,
-          "message": body["message"] ??
-              "Error processing request (${response.statusCode})"
-        };
-      }
-    } catch (e) {
-      return {"success": false, "message": "Network error: $e"};
-    }
+  // Debug / helper: reset attempts for a specific user
+  void resetAttempts(String username) {
+    _loginAttempts.remove(username);
   }
 
-  // 🔐 RESET PASSWORD (with attempt tracking)
-  Future<Map<String, dynamic>> resetPassword(
-      String token, String newPassword) async {
-    final url = Uri.parse("$baseUrl/reset-password");
-
-    if (resetAttempts >= maxResetAttempts) {
-      return {
-        "success": false,
-        "message":
-            "Too many failed reset attempts. Please try again later or request a new reset link."
-      };
-    }
-
-    try {
-      final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "token": token,
-          "newPassword": newPassword,
-        }),
-      );
-
-      final body = jsonDecode(response.body);
-
-      if (response.statusCode == 200) {
-        resetAttempts = 0;
-        return {
-          "success": body["success"] ?? true,
-          "message":
-              body["message"] ?? "Password has been reset successfully."
-        };
-      } else {
-        resetAttempts++;
-        return {
-          "success": false,
-          "message": body["message"] ??
-              "Reset failed (${response.statusCode}). Attempt $resetAttempts/$maxResetAttempts."
-        };
-      }
-    } catch (e) {
-      resetAttempts++;
-      return {
-        "success": false,
-        "message":
-            "Error resetting password: $e (Attempt $resetAttempts/$maxResetAttempts)"
-      };
-    }
-  }
-
-  // 🚪 LOGOUT
-  void logout() {
-    currentUser = null;
-    resetAttempts = 0;
-    _userAttempts.clear();
-  }
-
-  // ✅ RESET all attempts
+  // Debug / helper: clear all tracked attempts
   void resetAllAttempts() {
-    resetAttempts = 0;
-    _userAttempts.clear();
+    _loginAttempts.clear();
   }
 
-  // ✅ RESET attempts for a specific username
-  void resetAttemptsForUser(String username) {
-    _userAttempts[username] = 0;
+  // Debug / helper: query attempts for a user
+  int attemptsFor(String username) => _loginAttempts[username] ?? 0;
+
+  // Register a new user. Returns true if created, false if username already exists.
+  bool registerUser(String username, String passphrase) {
+    if (_userDatabase.containsKey(username)) return false;
+    _userDatabase[username] = User(username, passphrase);
+    return true;
   }
 }
