@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'auth_service.dart';
 
 class ForgotPassphraseScreen extends StatefulWidget {
   const ForgotPassphraseScreen({super.key});
@@ -9,8 +8,8 @@ class ForgotPassphraseScreen extends StatefulWidget {
 }
 
 class _ForgotPassphraseScreenState extends State<ForgotPassphraseScreen> {
+  final TextEditingController _userIdController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
-  final AuthService _authService = AuthService();
   bool _isLoading = false;
 
   // Theme/colors aligned with the login screen
@@ -23,46 +22,35 @@ class _ForgotPassphraseScreenState extends State<ForgotPassphraseScreen> {
 
   @override
   void dispose() {
+    _userIdController.dispose();
     _emailController.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
+    final userId = _userIdController.text.trim();
     final email = _emailController.text.trim();
 
-    if (email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your registered email address')),
-      );
+    if (userId.isEmpty || email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill in both fields')));
       return;
     }
 
-    // Basic email validation
+    // Basic email validation (lightweight)
     final emailRegex = RegExp(r"^[^@\s]+@[^@\s]+\.[^@\s]+$");
     if (!emailRegex.hasMatch(email)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid email address')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a valid email address')));
       return;
     }
 
     setState(() => _isLoading = true);
-
-    final result = await _authService.forgotPassword(email);
-
-    if (!mounted) return;
+    // TODO: Replace with real API call via AuthService
+    await Future.delayed(const Duration(seconds: 1));
     setState(() => _isLoading = false);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(result["message"] ?? "Something went wrong."),
-        backgroundColor: result["success"] ? Colors.green : Colors.red,
-      ),
-    );
-
-    if (result["success"]) {
-      Navigator.of(context).pop(); // go back to login screen
-    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('If an account exists, instructions have been sent.')));
+    Navigator.of(context).pop();
   }
 
   Widget _buildTextField({
@@ -88,8 +76,7 @@ class _ForgotPassphraseScreenState extends State<ForgotPassphraseScreen> {
           keyboardType: keyboardType,
           decoration: InputDecoration(
             hintText: hint,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: BorderSide(color: _textFieldBorderColor),
@@ -122,15 +109,14 @@ class _ForgotPassphraseScreenState extends State<ForgotPassphraseScreen> {
             child: Card(
               margin: EdgeInsets.zero,
               elevation: 8,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: Padding(
                 padding: const EdgeInsets.all(32.0),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // Header
                     Text(
                       'AURA',
                       textAlign: TextAlign.center,
@@ -143,34 +129,36 @@ class _ForgotPassphraseScreenState extends State<ForgotPassphraseScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Enter your registered email to reset your passphrase',
+                      'Please enter your AURA user credentials',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: _greyTextColor,
-                        fontSize: 16,
-                      ),
+                      style: TextStyle(color: _greyTextColor, fontSize: 16),
                     ),
                     const SizedBox(height: 24),
+
                     _buildTextField(
-                      label: 'Email Address',
-                      hint: 'Enter your email address',
+                      label: 'User ID',
+                      hint: 'Enter your user ID',
+                      controller: _userIdController,
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTextField(
+                      label: 'E-mail Address',
+                      hint: 'Enter your e-mail address',
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
                     ),
                     const SizedBox(height: 24),
+
                     Row(
                       children: [
                         Expanded(
                           child: OutlinedButton(
-                            onPressed:
-                                _isLoading ? null : () => Navigator.of(context).pop(),
+                            onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: _auraPrimaryColor,
                               side: BorderSide(color: _auraPrimaryColor),
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8)),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
                             child: const Text('Back'),
                           ),
@@ -181,27 +169,13 @@ class _ForgotPassphraseScreenState extends State<ForgotPassphraseScreen> {
                             onPressed: _isLoading ? null : _submit,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: _auraPrimaryColor,
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8)),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               elevation: 0,
                             ),
                             child: _isLoading
-                                ? const SizedBox(
-                                    height: 18,
-                                    width: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor:
-                                          AlwaysStoppedAnimation<Color>(
-                                              Colors.white),
-                                    ),
-                                  )
-                                : const Text(
-                                    'Submit',
-                                    style: TextStyle(color: Colors.white),
-                                  ),
+                                ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
+                                : const Text('Submit', style: TextStyle(color: Colors.white)),
                           ),
                         ),
                       ],

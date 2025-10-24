@@ -34,6 +34,8 @@ Future<void> saveReminderMap(Map<String, dynamic> m) async {
     final payload = json.encode(list);
     final encrypted = encrypter.encrypt(payload, iv: iv).base64;
     await prefs.setString('aura_reminders_${u.username}', encrypted);
+  // Debug: print what we saved so we can verify Home can load it.
+  try { debugPrint('saveReminderMap: saved reminder for ${u.username}: ${m['medication']} @ ${m['dateTime']}'); } catch (_) {}
     try { remindersNotifier.value = remindersNotifier.value + 1; } catch (_) {}
   } catch (_) {}
 }
@@ -220,9 +222,9 @@ class _RemindersPageState extends State<RemindersPage> {
     bool notify = existing?.notify ?? true;
     bool repeat = existing?.repeatDaily ?? false;
 
-    final ok = await showDialog<bool?>(context: context, builder: (c) => AlertDialog(
+    final ok = await showDialog<bool?>(context: context, builder: (c) => StatefulBuilder(builder: (ctx, setState) => AlertDialog(
       title: Text(existing == null ? 'Add Reminder' : 'Edit Reminder'),
-      content: StatefulBuilder(builder: (ctx, setState) => Column(mainAxisSize: MainAxisSize.min, children: [
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
   TextField(controller: medCtrl, decoration: const InputDecoration(labelText: 'Medication name', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
         const SizedBox(height: 8),
   TextField(controller: doseCtrl, decoration: const InputDecoration(labelText: 'Dosage', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
@@ -266,11 +268,14 @@ class _RemindersPageState extends State<RemindersPage> {
           const Expanded(child: Text('Enable notification'))
         ]),
         Row(children: [Checkbox(value: repeat, onChanged: (v) => setState(() => repeat = v ?? false)), const SizedBox(width: 8), const Expanded(child: Text('Repeat daily'))]),
-  ])),
-  actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')), TextButton(onPressed: () async {
+  ]),
+      actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')), TextButton(onPressed: () async {
         final med = medCtrl.text.trim();
         final dose = doseCtrl.text.trim();
-        if (med.isEmpty || dose.isEmpty) return; // validation: non-empty
+        if (med.isEmpty || dose.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter medication name and dosage')));
+          return;
+        }
         // Build a DateTime from selectedDate and selectedTime. If either is missing, default to now+15min.
         DateTime finalDt;
         if (selectedDate != null && selectedTime != null) {
@@ -279,7 +284,20 @@ class _RemindersPageState extends State<RemindersPage> {
           finalDt = DateTime.now().add(const Duration(minutes: 15));
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No date/time chosen — defaulting reminder to 15 minutes from now')));
         }
-        if (finalDt.isBefore(DateTime.now())) return; // validation: not in past
+        if (finalDt.isBefore(DateTime.now())) {
+          if (repeat) {
+            // For daily reminders, shift to next day and continue
+            finalDt = finalDt.add(const Duration(days: 1));
+            setState(() {
+              selectedDate = DateTime(finalDt.year, finalDt.month, finalDt.day);
+            });
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selected time is in the past — scheduling for the next day at the same time')));
+          } else {
+            // For non-daily reminders, ask user to select a correct time
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a correct time (future) or enable Repeat daily')));
+            return;
+          }
+        }
         final id = existing?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
         final r = Reminder(id: id, medication: med, dosage: dose, dateTime: finalDt, enabled: true, notify: notify, repeatDaily: repeat, takenAt: existing?.takenAt);
         if (existing != null && index != null) {
@@ -291,7 +309,7 @@ class _RemindersPageState extends State<RemindersPage> {
         try { remindersNotifier.value = remindersNotifier.value + 1; } catch (_) {}
          Navigator.pop(c, true);
       }, child: const Text('Save'))],
-    ));
+    )));
 
     if (ok == true) setState(() {});
   }
@@ -703,4 +721,47 @@ Future<bool?> showAddReminderDialog(BuildContext context) async {
 );
 }
 
+}
+
+// Helper: load today's reminder maps for the current user (decrypted if needed).
+Future<List<Map<String, dynamic>>> loadTodaysReminderMaps() async {
+  final out = <Map<String, dynamic>>[];
+  final u = AuthService().currentUser;
+  if (u == null) return out;
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('aura_reminders_${u.username}');
+    if (raw == null || raw.isEmpty) return out;
+    final keyStr = ('${u.passphrase}aura_salt_2025').padRight(32).substring(0,32);
+    final key = encryptpkg.Key.fromUtf8(keyStr);
+    final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
+    final iv = encryptpkg.IV.fromLength(16);
+    try {
+      final dec = encrypter.decrypt64(raw, iv: iv);
+      final list = json.decode(dec) as List<dynamic>;
+      final now = DateTime.now();
+      for (final e in list) {
+        try {
+          final m = Map<String, dynamic>.from(e as Map);
+          final dt = DateTime.parse(m['dateTime'] as String);
+          if (dt.year == now.year && dt.month == now.month && dt.day == now.day) out.add(m);
+        } catch (_) {}
+      }
+      return out;
+    } catch (_) {
+      // try plaintext
+      try {
+        final list = json.decode(raw) as List<dynamic>;
+        final now = DateTime.now();
+        for (final e in list) {
+          try {
+            final m = Map<String, dynamic>.from(e as Map);
+            final dt = DateTime.parse(m['dateTime'] as String);
+            if (dt.year == now.year && dt.month == now.month && dt.day == now.day) out.add(m);
+          } catch (_) {}
+        }
+      } catch (_) {}
+    }
+  } catch (_) {}
+  return out;
 }
