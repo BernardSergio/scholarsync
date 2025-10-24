@@ -16,35 +16,45 @@ enum DayStatus { taken, missed, nodata }
 
 class _DashboardPageState extends State<DashboardPage> with SingleTickerProviderStateMixin {
   DateTime _visibleMonth = DateTime(DateTime.now().year, DateTime.now().month);
-  final Map<String, DayStatus> _dayStatus = {}; // yyyy-MM-dd -> status
-  final Map<String, List<Map<String,dynamic>>> _dayDetails = {}; // yyyy-MM-dd -> list of reminders/history entries
+  final Map<String, DayStatus> _dayStatus = {}; 
+  final Map<String, List<Map<String,dynamic>>> _dayDetails = {}; 
   double _monthAdherencePercent = 0.0;
-  final Map<int,double> _weeklyAdherencePct = {}; // week index -> percent (0-100)
-  final Map<String,double> _moodByDate = {}; // yyyy-MM-dd -> avg mood (0-10)
+  final Map<int,double> _weeklyAdherencePct = {}; 
+  final Map<String,double> _moodByDate = {}; 
 
   late TabController _tabController;
+  String? _username; // store the current logged-in user's username
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _loadDataForMonth(_visibleMonth);
+    _loadCurrentUserAndData();
+  }
+
+  Future<void> _loadCurrentUserAndData() async {
+    final user = await AuthService().getCurrentUser();
+    if (user == null) return;
+    setState(() {
+      _username = user['username'];
+    });
+    await _loadDataForMonth(_visibleMonth);
   }
 
   Future<encryptpkg.Key?> _keyForUser() async {
-    final u = AuthService().currentUser;
-    if (u == null) return null;
-    final k = ('${u.passphrase}aura_salt_2025').padRight(32).substring(0,32);
+    if (_username == null) return null;
+    final k = ('${_username}_aura_salt_2025').padRight(32).substring(0, 32);
     return encryptpkg.Key.fromUtf8(k);
   }
 
   Future<void> _loadDataForMonth(DateTime month) async {
     _dayStatus.clear();
     _dayDetails.clear();
-    final u = AuthService().currentUser;
-    if (u == null) { setState(() {}); return; }
+
+    if (_username == null) { setState(() {}); return; }
+
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString('aura_reminders_${u.username}');
+    final raw = prefs.getString('aura_reminders_$_username');
     if (raw == null || raw.isEmpty) { setState(() {}); return; }
 
     String decoded = raw;
@@ -56,7 +66,6 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
         decoded = encrypter.decrypt64(raw, iv: iv);
       }
     } catch (_) {
-      // fallback: treat raw as plaintext JSON
       decoded = raw;
     }
 
@@ -65,23 +74,21 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     try {
       final list = json.decode(decoded) as List<dynamic>;
       final now = DateTime.now();
-      // Build a map of statuses per day for this month
+
       for (final e in list) {
         try {
           final m = Map<String,dynamic>.from(e as Map);
           final dt = DateTime.parse(m['dateTime'] as String).toLocal();
           final key = DateFormat('yyyy-MM-dd').format(dt);
           final taken = m['takenAt'] != null;
-          // record details
           _dayDetails.putIfAbsent(key, () => []).add(m);
-          // determine status: taken wins, else missed if past and not taken
+
           final dayStart = DateTime(dt.year, dt.month, dt.day);
           final nowDayStart = DateTime(now.year, now.month, now.day);
           if (taken) {
             _dayStatus[key] = DayStatus.taken;
             if (dayStart.month == month.month && dayStart.year == month.year) { takenForMonth++; totalForMonth++; }
           } else if (dayStart.isBefore(nowDayStart) && dayStart.month == month.month && dayStart.year == month.year) {
-            // if the scheduled time is earlier than now and not taken -> missed
             _dayStatus.putIfAbsent(key, () => DayStatus.missed);
             totalForMonth++;
           } else {
@@ -91,14 +98,12 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       }
     } catch (_) {}
 
-    // compute monthly adherence percent
     if (totalForMonth > 0) {
       _monthAdherencePercent = (takenForMonth / totalForMonth) * 100.0;
     } else {
       _monthAdherencePercent = 0.0;
     }
 
-    // compute weekly adherence buckets for visible month (4 weeks)
     _weeklyAdherencePct.clear();
     final days = DateTime(month.year, month.month + 1, 0).day;
     for (int w = 0; w < 4; w++) {
@@ -117,14 +122,11 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       _weeklyAdherencePct[w+1] = pct;
     }
 
-    // load mood entries for the last 7 days
-  await _loadMoodData();
-
+    await _loadMoodData();
     setState(() {});
   }
 
   Future<void> _loadMoodData() async {
-    // Read journal entries and aggregate mood scores per day (attempt to parse numeric mood values)
     try {
       final prefs = await SharedPreferences.getInstance();
       const key = 'aura_journal_entries';
@@ -135,10 +137,9 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
         try {
           final m = Map<String, dynamic>.from(e as Map);
           final type = (m['type'] ?? 0) as int;
-          if (type != 0) continue; // only mood entries
+          if (type != 0) continue;
           final dt = DateTime.parse(m['dateTime'] as String).toLocal();
           final keyDate = DateFormat('yyyy-MM-dd').format(dt);
-          // Try to parse a numeric mood score from title or body (look for 0-10 or x/10 patterns)
           double? val;
           final title = (m['title'] ?? '').toString();
           final body = (m['body'] ?? '').toString();
@@ -152,7 +153,6 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
             if (match2 != null) val = double.tryParse(match2.group(1)!);
           }
           if (val == null) continue;
-          // clamp to 0-10
           if (val < 0) val = 0; if (val > 10) val = 10;
           sums.putIfAbsent(keyDate, () => []).add(val);
         } catch (_) {}
@@ -161,9 +161,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       sums.forEach((k, vals) {
         if (vals.isNotEmpty) _moodByDate[k] = vals.reduce((a,b)=>a+b)/vals.length;
       });
-    } catch (_) {
-      // ignore
-    }
+    } catch (_) {}
   }
 
   void _prevMonth() {
@@ -340,18 +338,26 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     ]);
   }
 
-    @override
-    Widget build(BuildContext context) {
-      return Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          TabBar(controller: _tabController, tabs: const [Tab(text: 'Calendar'), Tab(text: 'Trends')], labelColor: Colors.teal, unselectedLabelColor: Colors.grey),
-          const SizedBox(height: 12),
-          Expanded(child: TabBarView(controller: _tabController, children: [SingleChildScrollView(child: _buildCalendar()), SingleChildScrollView(child: Padding(padding: const EdgeInsets.all(8.0), child: _buildTrends()))])),
-        ]),
-      );
+  @override
+  Widget build(BuildContext context) {
+    if (_username == null) {
+      return const Center(child: CircularProgressIndicator());
     }
 
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Welcome, $_username!', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        TabBar(controller: _tabController, tabs: const [Tab(text: 'Calendar'), Tab(text: 'Trends')], labelColor: Colors.teal, unselectedLabelColor: Colors.grey),
+        const SizedBox(height: 12),
+        Expanded(child: TabBarView(controller: _tabController, children: [
+          SingleChildScrollView(child: _buildCalendar()),
+          SingleChildScrollView(child: Padding(padding: const EdgeInsets.all(8.0), child: _buildTrends())),
+        ])),
+      ]),
+    );
+  }
   }
 
   class _SimpleSparkline extends StatelessWidget {

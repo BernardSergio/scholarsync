@@ -110,75 +110,85 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _loadTodaysReminders() async {
-    try {
-      final u = AuthService().currentUser;
-      if (u == null) return;
-      final prefs = await SharedPreferences.getInstance();
-      final remKey = 'aura_reminders_${u.username}';
-      final raw = prefs.getString(remKey);
-      final now = DateTime.now();
-         final List<Map<String, dynamic>> meds = await reminders_lib.loadTodaysReminderMaps();
-      if (raw != null && raw.isNotEmpty) {
+Future<void> _loadTodaysReminders() async {
+  try {
+    final u = AuthService().currentUser;
+    if (u == null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final remKey = 'aura_reminders_${u['username']}'; // ✅ fixed
+
+    final raw = prefs.getString(remKey);
+    final now = DateTime.now();
+    final List<Map<String, dynamic>> meds = await reminders_lib.loadTodaysReminderMaps();
+
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final keyStr = ('${u['passphrase'] ?? ''}aura_salt_2025') // ✅ fixed
+            .padRight(32)
+            .substring(0, 32);
+
+        final key = encryptpkg.Key.fromUtf8(keyStr);
+        final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
+        final iv = encryptpkg.IV.fromLength(16);
+
         try {
-          final keyStr = ('${u.passphrase}aura_salt_2025').padRight(32).substring(0,32);
-          final key = encryptpkg.Key.fromUtf8(keyStr);
-          final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
-          final iv = encryptpkg.IV.fromLength(16);
+          final dec = encrypter.decrypt64(raw, iv: iv);
+          debugPrint('home: decrypted reminders payload length=${dec.length}');
+          final list = json.decode(dec) as List<dynamic>;
+          debugPrint('home: parsed list len=${list.length}');
+          for (final e in list) {
             try {
-            final dec = encrypter.decrypt64(raw, iv: iv);
-            debugPrint('home: decrypted reminders payload length=${dec.length}');
-            final list = json.decode(dec) as List<dynamic>;
-            debugPrint('home: parsed list len=${list.length}');
+              final m = Map<String, dynamic>.from(e as Map);
+              debugPrint('home: found reminder item medication=${m['medication']} dateTime=${m['dateTime']}');
+              final dt = DateTime.parse(m['dateTime'] as String);
+              if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
+                meds.add(m);
+              }
+            } catch (err) {
+              debugPrint('home: item parse error $err');
+            }
+          }
+        } catch (err) {
+          debugPrint('home: decrypt failed $err — trying plaintext');
+          // try plaintext
+          try {
+            final list = json.decode(raw) as List<dynamic>;
+            debugPrint('home: plaintext parse list len=${list.length}');
             for (final e in list) {
               try {
                 final m = Map<String, dynamic>.from(e as Map);
-                debugPrint('home: found reminder item medication=${m['medication']} dateTime=${m['dateTime']}');
+                debugPrint('home: plaintext item medication=${m['medication']} dateTime=${m['dateTime']}');
                 final dt = DateTime.parse(m['dateTime'] as String);
                 if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
                   meds.add(m);
                 }
-              } catch (err) { debugPrint('home: item parse error $err'); }
+              } catch (_) {}
             }
-          } catch (err) {
-            debugPrint('home: decrypt failed $err — trying plaintext');
-            // try plaintext
-            try {
-              final list = json.decode(raw) as List<dynamic>;
-              debugPrint('home: plaintext parse list len=${list.length}');
-              for (final e in list) {
-                try {
-                  final m = Map<String, dynamic>.from(e as Map);
-                  debugPrint('home: plaintext item medication=${m['medication']} dateTime=${m['dateTime']}');
-                  final dt = DateTime.parse(m['dateTime'] as String);
-                  if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
-                    meds.add(m);
-                  }
-                } catch (_) {}
-              }
-            } catch (_) {}
-          }
-        } catch (_) {}
-      }
-
-      // store meds for today's medications card and also merge into today's activity
-      setState(() {
-        // remove previous medication entries we added earlier (match by a tag)
-        _todayActivity.removeWhere((a) => a['source'] == 'reminder');
-        _todaysMedReminders.clear();
-        _todaysMedReminders.addAll(meds);
-        for (final m in meds.reversed) {
-          _todayActivity.insert(0, {
-            'title': '${m['medication']} • ${m['dosage']}',
-            'subtitle': DateFormat.jm().format(DateTime.parse(m['dateTime'] as String)),
-            'icon': Icons.medication,
-            'color': Colors.green,
-            'source': 'reminder',
-          });
+          } catch (_) {}
         }
-      });
-    } catch (_) {}
-  }
+      } catch (_) {}
+    }
+
+    // store meds for today's medications card and also merge into today's activity
+    setState(() {
+      // remove previous medication entries we added earlier (match by a tag)
+      _todayActivity.removeWhere((a) => a['source'] == 'reminder');
+      _todaysMedReminders.clear();
+      _todaysMedReminders.addAll(meds);
+      for (final m in meds.reversed) {
+        _todayActivity.insert(0, {
+          'title': '${m['medication']} • ${m['dosage']}',
+          'subtitle': DateFormat.jm().format(DateTime.parse(m['dateTime'] as String)),
+          'icon': Icons.medication,
+          'color': Colors.green,
+          'source': 'reminder',
+        });
+      }
+    });
+  } catch (_) {}
+}
+
 
   void _logActivity(String title, String subtitle, IconData icon, Color color) {
     setState(() {
@@ -534,7 +544,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   final bool sel = selectedFeelings.contains(f);
                   return GestureDetector(
                     onTap: () => setState(() {
-                      if (sel) selectedFeelings.remove(f); else selectedFeelings.add(f);
+                      if (sel) {
+                        selectedFeelings.remove(f);
+                      } else {
+                        selectedFeelings.add(f);
+                      }
                     }),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -585,8 +599,8 @@ class _HomeScreenState extends State<HomeScreen> {
               await prefs.setString(key, json.encode(list));
             } catch (_) {}
             // Add to today's activity: show descriptor and comma-separated feelings
-            final feelingsStr = selectedFeelings.isEmpty ? '' : ' • ' + selectedFeelings.join(', ');
-            setState(() => _todayActivity.insert(0, {'title': '${descriptor}', 'subtitle': '${intensity}/10$feelingsStr', 'icon': Icons.sentiment_satisfied, 'color': Colors.blue}));
+            final feelingsStr = selectedFeelings.isEmpty ? '' : ' • ${selectedFeelings.join(', ')}';
+            setState(() => _todayActivity.insert(0, {'title': descriptor, 'subtitle': '$intensity/10$feelingsStr', 'icon': Icons.sentiment_satisfied, 'color': Colors.blue}));
             Navigator.pop(c, true);
           }, child: const Text('Save'))
         ],

@@ -113,11 +113,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                 setState(() {
                                   _isLoading = true;
                                 });
-
                                 final username = _usernameController.text.trim();
                                 final passphrase = _passphraseController.text;
 
-                                final result = await _authService.authenticate(username, passphrase);
+                                final success = await _authService.loginUser(username, passphrase);
 
                                 setState(() {
                                   _isLoading = false;
@@ -126,12 +125,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                 if (!mounted) return;
                                 final ctx = context;
 
-                                if (result.success) {
+                                if (success) {
                                   // Navigate to home on success
                                   Navigator.of(ctx).pushReplacementNamed('/home');
                                 } else {
                                   ScaffoldMessenger.of(ctx).showSnackBar(
-                                    SnackBar(content: Text(result.errorMessage ?? 'Authentication failed')),
+                                    const SnackBar(content: Text('Authentication failed. Please check your credentials.')),
                                   );
                                 }
                               },
@@ -152,12 +151,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-
-                    // (Two-factor moved to Settings)
-
-                    // debug controls removed
-
-                    // Don't have an account? Sign up
                     TextButton(
                       onPressed: () {
                         Navigator.of(context).pushNamed('/signup');

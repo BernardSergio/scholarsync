@@ -1,9 +1,9 @@
-// lib/main.dart
-
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
 import 'home_screen.dart';
 import 'signup_screen.dart';
+import 'forgot_passphrase_screen.dart';
+import 'reset_password_screen.dart';
 
 void main() {
   runApp(const AuraApp());
@@ -20,7 +20,6 @@ class AuraApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.teal,
         fontFamily: 'Roboto',
-        // THIS IS THE ONLY CHANGE: Use the old class name
         cardTheme: CardThemeData(
           elevation: 0,
           shape: RoundedRectangleBorder(
@@ -34,6 +33,17 @@ class AuraApp extends StatelessWidget {
         '/login': (context) => const LoginScreen(),
         '/signup': (context) => const SignupScreen(),
         '/home': (context) => const HomeScreen(),
+        '/forgot-passphrase': (context) => const ForgotPassphraseScreen(),
+      },
+      onGenerateRoute: (settings) {
+        if (settings.name != null && settings.name!.startsWith('/reset-password')) {
+          final uri = Uri.parse(settings.name!);
+          final token = uri.queryParameters['token'] ?? '';
+          return MaterialPageRoute(
+            builder: (context) => ResetPasswordScreen(resetToken: token),
+          );
+        }
+        return null;
       },
     );
   }

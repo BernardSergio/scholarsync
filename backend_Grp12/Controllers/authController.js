@@ -51,42 +51,23 @@ export const registerUser = async (req, res) => {
 // ---------------------- Login ----------------------
 export const loginUser = async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, email, password } = req.body;
 
-    if (!username || !password) {
+    if ((!username && !email) || !password) {
       return res
         .status(400)
-        .json({ message: "Please provide both username and password." });
+        .json({ message: "Please provide a username/email and password." });
     }
 
-    const user = await User.findOne({ username });
+    const user = await User.findOne({
+      $or: [{ username }, { email }],
+    });
     if (!user) return res.status(404).json({ message: "User not found." });
 
-    if (user.isLocked && user.isLocked()) {
-      const minutesLeft = Math.ceil((user.lockUntil - Date.now()) / 60000);
-      return res
-        .status(403)
-        .json({
-          message: `Account locked. Try again in ${minutesLeft} minute(s).`,
-        });
-    }
-
     const isMatch = await user.matchPassword(password);
-
     if (!isMatch) {
-      user.failedLoginAttempts += 1;
-      if (user.failedLoginAttempts >= 5) {
-        user.lockUntil = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-      }
-      await user.save();
       return res.status(401).json({ message: "Invalid password." });
     }
-
-    // reset failed attempts
-    user.failedLoginAttempts = 0;
-    user.lockUntil = null;
-    user.lastActive = new Date();
-    await user.save();
 
     const token = jwt.sign(
       { id: user._id, username: user.username },
@@ -106,10 +87,11 @@ export const loginUser = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("❌ Login error:", err);
+    console.error("Login error:", err);
     res.status(500).json({ error: "Server error during login." });
   }
 };
+
 
 // ---------------------- Forgot Password ----------------------
 export const forgotPassword = async (req, res) => {
@@ -169,13 +151,19 @@ export const forgotPassword = async (req, res) => {
       `,
     };
 
-    await transporter.sendMail(mailOptions);
-    console.log("✅ Reset email sent to:", user.email);
-    console.log("🧩 Plain token for testing:", resetToken);
+      try {
+        const info = await transporter.sendMail(mailOptions);
+        console.log("Reset email sent to:", user.email);
+        console.log("Message ID:", info.messageId);
+        console.log("Plain token for testing:", resetToken);
+      } catch (emailErr) {
+        console.error("❌ Error sending email:", emailErr);
+        return res.status(500).json({ success: false, message: "Failed to send reset email. Check server logs for details." });
+      }
 
     return res.status(200).json(genericSuccess);
   } catch (err) {
-    console.error("❌ Forgot Password Error:", err);
+    console.error("Forgot Password Error:", err);
     return res
       .status(500)
       .json({
@@ -193,43 +181,51 @@ export const resetPassword = async (req, res) => {
     console.log("🔹 Received token:", token);
 
     if (!token || !newPassword) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Token and newPassword are required." });
+      return res.status(400).json({
+        success: false,
+        message: "Token and newPassword are required."
+      });
     }
 
+    // Hash the incoming token to compare with stored token
     const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
     console.log("🔹 Hashed token:", hashedToken);
 
+    // Find user with valid token
     const user = await User.findOne({
       resetPasswordToken: hashedToken,
       resetPasswordExpires: { $gt: Date.now() },
     });
 
-    console.log("🔹 Found user:", user);
+    console.log("🔹 Found user:", user ? user.email : "No user found");
 
     if (!user) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid or expired token." });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired token."
+      });
     }
 
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
-    user.password = hashedPassword;
+    // Assign the new password (pre-save hook will hash it)
+    user.password = newPassword;
 
+    // Clear reset token fields
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
 
-    await user.save();
+    await user.save(); // pre-save hook handles hashing
+    console.log(`🔹 Password successfully updated for ${user.email}`);
 
-    return res
-      .status(200)
-      .json({ success: true, message: "Password has been reset successfully." });
+    return res.status(200).json({
+      success: true,
+      message: "Password has been reset successfully."
+    });
   } catch (err) {
     console.error("❌ Reset Password Error:", err);
-    return res
-      .status(500)
-      .json({ success: false, message: "Server error while resetting password." });
+    return res.status(500).json({
+      success: false,
+      message: "Server error while resetting password."
+    });
   }
 };
+

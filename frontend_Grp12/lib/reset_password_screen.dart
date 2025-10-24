@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class ResetPasswordScreen extends StatefulWidget {
-  // The reset token is typically included in the email link and passed to this screen
   final String resetToken;
 
   const ResetPasswordScreen({super.key, required this.resetToken});
@@ -31,26 +32,51 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   }
 
   Future<void> _submit() async {
-    final p = _passwordController.text;
-    final c = _confirmController.text;
+    final password = _passwordController.text.trim();
+    final confirm = _confirmController.text.trim();
 
-    if (p.length < 8) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password must be at least 8 characters')));
+    if (password.length < 8) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Password must be at least 8 characters')));
       return;
     }
-    if (p != c) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Passwords do not match')));
+    if (password != confirm) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Passwords do not match')));
       return;
     }
 
     setState(() => _isLoading = true);
-    // TODO: Call backend to reset password using widget.resetToken and p
-    await Future.delayed(const Duration(seconds: 1));
-    setState(() => _isLoading = false);
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password has been reset successfully')));
-    Navigator.of(context).pushReplacementNamed('/login');
+    try {
+      final url = Uri.parse('http://localhost:5000/api/auth/reset-password');
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'token': widget.resetToken,
+          'newPassword': password,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Password has been reset successfully')));
+        // Redirect to login screen after reset
+        Navigator.of(context).pushReplacementNamed('/login');
+      } else {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(data['message'] ?? 'Reset failed')));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -65,7 +91,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             child: Card(
               margin: EdgeInsets.zero,
               elevation: 8,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
               child: Padding(
                 padding: const EdgeInsets.all(32.0),
                 child: Column(
@@ -89,19 +116,26 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                       style: TextStyle(color: _greyTextColor, fontSize: 16),
                     ),
                     const SizedBox(height: 20),
-
                     TextField(
                       controller: _passwordController,
                       obscureText: !_isPasswordVisible,
                       decoration: InputDecoration(
                         labelText: 'New password',
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: _textFieldBorderColor)),
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: _textFieldBorderColor)),
                         filled: true,
                         fillColor: _textFieldFillColor,
                         suffixIcon: IconButton(
-                          icon: Icon(_isPasswordVisible ? Icons.visibility : Icons.visibility_off, color: _greyTextColor),
-                          onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+                          icon: Icon(
+                              _isPasswordVisible
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                              color: _greyTextColor),
+                          onPressed: () =>
+                              setState(() => _isPasswordVisible = !_isPasswordVisible),
                         ),
                       ),
                     ),
@@ -111,14 +145,16 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                       obscureText: !_isPasswordVisible,
                       decoration: InputDecoration(
                         labelText: 'Confirm password',
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: _textFieldBorderColor)),
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: _textFieldBorderColor)),
                         filled: true,
                         fillColor: _textFieldFillColor,
                       ),
                     ),
                     const SizedBox(height: 20),
-
                     Row(
                       children: [
                         Expanded(
@@ -128,7 +164,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                               foregroundColor: _auraPrimaryColor,
                               side: BorderSide(color: _auraPrimaryColor),
                               padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8)),
                             ),
                             child: const Text('Back'),
                           ),
@@ -140,16 +177,26 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: _auraPrimaryColor,
                               padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8)),
                               elevation: 0,
                             ),
-                            child: _isLoading ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white))) : const Text('Submit', style: TextStyle(color: Colors.white)),
+                            child: _isLoading
+                                ? const SizedBox(
+                                    height: 18,
+                                    width: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(Colors.white)),
+                                  )
+                                : const Text('Submit',
+                                    style: TextStyle(color: Colors.white)),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    SelectableText('Reset token: ${widget.resetToken}', style: TextStyle(color: _greyTextColor, fontSize: 12)),
                   ],
                 ),
               ),

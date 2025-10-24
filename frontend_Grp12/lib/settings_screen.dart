@@ -206,11 +206,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Container(width:36, height:36, decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8)), child: Center(child: Icon(ic, size:18, color: Colors.teal)));
   }
 
-  Future<void> _signOut() async {
-    // perform sign out via AuthService and clear active sessions
-    AuthService().signOut();
-    Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
-  }
+Future<void> _signOut() async {
+  await AuthService().logoutUser();
+  Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+}
+
 
   @override
   Widget build(BuildContext context) {

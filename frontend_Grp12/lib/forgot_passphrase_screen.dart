@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class ForgotPassphraseScreen extends StatefulWidget {
   const ForgotPassphraseScreen({super.key});
@@ -12,7 +14,6 @@ class _ForgotPassphraseScreenState extends State<ForgotPassphraseScreen> {
   final TextEditingController _emailController = TextEditingController();
   bool _isLoading = false;
 
-  // Theme/colors aligned with the login screen
   final Color _auraPrimaryColor = const Color.fromARGB(255, 0, 146, 110);
   final Color _scaffoldBackgroundColor = const Color(0xFFF3F7FF);
   final Color _greyTextColor = const Color(0xFF757575);
@@ -28,29 +29,50 @@ class _ForgotPassphraseScreenState extends State<ForgotPassphraseScreen> {
   }
 
   Future<void> _submit() async {
-    final userId = _userIdController.text.trim();
     final email = _emailController.text.trim();
 
-    if (userId.isEmpty || email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill in both fields')));
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Please enter your email')));
       return;
     }
 
-    // Basic email validation (lightweight)
     final emailRegex = RegExp(r"^[^@\s]+@[^@\s]+\.[^@\s]+$");
     if (!emailRegex.hasMatch(email)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a valid email address')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Please enter a valid email address')));
       return;
     }
 
     setState(() => _isLoading = true);
-    // TODO: Replace with real API call via AuthService
-    await Future.delayed(const Duration(seconds: 1));
-    setState(() => _isLoading = false);
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('If an account exists, instructions have been sent.')));
-    Navigator.of(context).pop();
+    try {
+      final response = await http.post(
+        Uri.parse('http://localhost:5000/api/auth/forgot-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'email': email}),
+      );
+
+      final data = json.decode(response.body);
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['message'] ?? 'Instructions sent to your email')),
+        );
+        Navigator.of(context).pop();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['message'] ?? 'Error sending reset email')),
+        );
+      }
+    } catch (err) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Server error. Please try again later.')),
+      );
+      print('Forgot password error: $err');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Widget _buildTextField({
@@ -116,7 +138,6 @@ class _ForgotPassphraseScreenState extends State<ForgotPassphraseScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Header
                     Text(
                       'AURA',
                       textAlign: TextAlign.center,
@@ -134,10 +155,9 @@ class _ForgotPassphraseScreenState extends State<ForgotPassphraseScreen> {
                       style: TextStyle(color: _greyTextColor, fontSize: 16),
                     ),
                     const SizedBox(height: 24),
-
                     _buildTextField(
-                      label: 'User ID',
-                      hint: 'Enter your user ID',
+                      label: 'Username',
+                      hint: 'Enter your username',
                       controller: _userIdController,
                     ),
                     const SizedBox(height: 16),
@@ -148,7 +168,6 @@ class _ForgotPassphraseScreenState extends State<ForgotPassphraseScreen> {
                       keyboardType: TextInputType.emailAddress,
                     ),
                     const SizedBox(height: 24),
-
                     Row(
                       children: [
                         Expanded(
@@ -174,7 +193,11 @@ class _ForgotPassphraseScreenState extends State<ForgotPassphraseScreen> {
                               elevation: 0,
                             ),
                             child: _isLoading
-                                ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
+                                ? const SizedBox(
+                                    height: 18,
+                                    width: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
                                 : const Text('Submit', style: TextStyle(color: Colors.white)),
                           ),
                         ),

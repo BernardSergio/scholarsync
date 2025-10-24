@@ -12,32 +12,51 @@ final ValueNotifier<int> remindersNotifier = ValueNotifier<int>(0);
 
 // Shared helper: persist a single reminder map into the user's encrypted reminders list.
 Future<void> saveReminderMap(Map<String, dynamic> m) async {
-  final u = AuthService().currentUser;
+  final u = await AuthService().getCurrentUser(); // ensure it's loaded properly
   if (u == null) return;
+
   try {
     final prefs = await SharedPreferences.getInstance();
-    final keyStr = ('${u.passphrase}aura_salt_2025').padRight(32).substring(0,32);
+
+    // Use username to generate the encryption key (since passphrase isn’t stored)
+    final keyStr = ('${u['username']}_aura_salt_2025').padRight(32).substring(0, 32);
     final key = encryptpkg.Key.fromUtf8(keyStr);
     final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
     final iv = encryptpkg.IV.fromLength(16);
-    final raw = prefs.getString('aura_reminders_${u.username}');
+
+    final storageKey = 'aura_reminders_${u['username']}';
+    final raw = prefs.getString(storageKey);
     List<dynamic> list = [];
+
     if (raw != null && raw.isNotEmpty) {
       try {
         final dec = encrypter.decrypt64(raw, iv: iv);
         list = json.decode(dec) as List<dynamic>;
       } catch (_) {
-        try { list = json.decode(raw) as List<dynamic>; } catch (_) { list = []; }
+        try {
+          list = json.decode(raw) as List<dynamic>;
+        } catch (_) {
+          list = [];
+        }
       }
     }
+
     list.insert(0, m);
     final payload = json.encode(list);
     final encrypted = encrypter.encrypt(payload, iv: iv).base64;
-    await prefs.setString('aura_reminders_${u.username}', encrypted);
-  // Debug: print what we saved so we can verify Home can load it.
-  try { debugPrint('saveReminderMap: saved reminder for ${u.username}: ${m['medication']} @ ${m['dateTime']}'); } catch (_) {}
-    try { remindersNotifier.value = remindersNotifier.value + 1; } catch (_) {}
-  } catch (_) {}
+    await prefs.setString(storageKey, encrypted);
+
+    // Debugging info
+    try {
+      debugPrint('saveReminderMap: saved reminder for ${u['username']}: ${m['medication']} @ ${m['dateTime']}');
+    } catch (_) {}
+
+    try {
+      remindersNotifier.value = remindersNotifier.value + 1;
+    } catch (_) {}
+  } catch (e) {
+    debugPrint('Error saving reminder: $e');
+  }
 }
 
 enum ReminderStatus { pending, taken, missed }
@@ -118,100 +137,121 @@ class _RemindersPageState extends State<RemindersPage> {
     _loadIfAuthenticated();
   }
 
-  Future<encryptpkg.Key?> _keyForCurrentUser() async {
-    final u = AuthService().currentUser;
-    if (u == null) return null;
-    // Derive 32-byte key from passphrase (demo only)
-    final k = ('${u.passphrase}aura_salt_2025').padRight(32).substring(0, 32);
-    return encryptpkg.Key.fromUtf8(k);
-  }
+Future<encryptpkg.Key?> _keyForCurrentUser() async {
+  final u = AuthService().currentUser;
+  if (u == null) return null;
 
-  Future<void> _loadIfAuthenticated() async {
-    final u = AuthService().currentUser;
-    if (u == null) return;
-    final prefs = await SharedPreferences.getInstance();
-    final enc = prefs.getString(_storageKeyFor(u.username));
-    if (enc != null && enc.isNotEmpty) {
-      try {
-        final key = await _keyForCurrentUser();
-        if (key != null) {
-          final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
-          final iv = encryptpkg.IV.fromLength(16);
-          final decrypted = encrypter.decrypt64(enc, iv: iv);
-          final list = json.decode(decrypted) as List<dynamic>;
-          final tmp = list.map((e) => Reminder.fromJson(e as Map<String, dynamic>)).toList();
-          // Dedupe by id keeping the last occurrence (newest) to ensure a single
-          // canonical reminder per id (handles duplicates inserted from other flows)
-          final seen = <String>{};
-          final dedupedReversed = <Reminder>[];
-          for (final r in tmp.reversed) {
-            if (!seen.contains(r.id)) {
-              dedupedReversed.add(r);
-              seen.add(r.id);
-            }
+  // Get the passphrase safely from the map
+  final passphrase = u['passphrase'] ?? '';
+
+  // Derive 32-byte key from passphrase (demo only)
+  final k = ('${passphrase}aura_salt_2025').padRight(32).substring(0, 32);
+
+  return encryptpkg.Key.fromUtf8(k);
+}
+
+
+Future<void> _loadIfAuthenticated() async {
+  final u = AuthService().currentUser;
+  if (u == null) return;
+
+  final prefs = await SharedPreferences.getInstance();
+  final enc = prefs.getString(_storageKeyFor(u['username']));
+
+  if (enc != null && enc.isNotEmpty) {
+    try {
+      final key = await _keyForCurrentUser();
+      if (key != null) {
+        final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
+        final iv = encryptpkg.IV.fromLength(16);
+        final decrypted = encrypter.decrypt64(enc, iv: iv);
+        final list = json.decode(decrypted) as List<dynamic>;
+        final tmp = list
+            .map((e) => Reminder.fromJson(e as Map<String, dynamic>))
+            .toList();
+
+        // Deduplicate reminders by id
+        final seen = <String>{};
+        final dedupedReversed = <Reminder>[];
+        for (final r in tmp.reversed) {
+          if (!seen.contains(r.id)) {
+            dedupedReversed.add(r);
+            seen.add(r.id);
           }
-          final deduped = dedupedReversed.reversed.toList();
-          // Replace only on successful decrypt/parse
-          _reminders.clear();
-          _reminders.addAll(deduped);
         }
-      } catch (_) {
-        // decrypt failed — attempt plaintext fallback (in case data was saved without encryption)
-        try {
-          final list = json.decode(enc) as List<dynamic>;
-          final tmp = list.map((e) => Reminder.fromJson(e as Map<String, dynamic>)).toList();
-          _reminders.clear();
-          _reminders.addAll(tmp);
-          // Attempt to migrate to encrypted storage (best-effort)
-          try {
-            await _saveForCurrentUser();
-          } catch (_) {}
-        } catch (_) {
-          // keep existing in-memory reminders if plaintext parse also fails
-        }
-      }
-    }
+        final deduped = dedupedReversed.reversed.toList();
 
-    final rawHist = prefs.getString(_historyKeyFor(u.username));
-    if (rawHist != null && rawHist.isNotEmpty) {
+        _reminders.clear();
+        _reminders.addAll(deduped);
+      }
+    } catch (_) {
+      // Fallback: decrypt failed — try plaintext
       try {
-        final list = json.decode(rawHist) as List<dynamic>;
-        final tmpHist = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-        _history.clear();
-        _history.addAll(tmpHist);
+        final list = json.decode(enc) as List<dynamic>;
+        final tmp =
+            list.map((e) => Reminder.fromJson(e as Map<String, dynamic>)).toList();
+        _reminders
+          ..clear()
+          ..addAll(tmp);
+        try {
+          await _saveForCurrentUser();
+        } catch (_) {}
       } catch (_) {
-        // keep existing history on parse failure
+        // keep existing reminders
       }
     }
-
-    setState(() {});
-    _loadedOnce = true;
   }
 
-  Future<void> _saveForCurrentUser() async {
-    final u = AuthService().currentUser;
-    if (u == null) return;
-    final prefs = await SharedPreferences.getInstance();
-    final key = await _keyForCurrentUser();
-    if (key == null) return;
-    final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
-    final iv = encryptpkg.IV.fromLength(16);
-    // Deduplicate reminders by id before saving. Keep the last occurrence
-    // (most recent) so that updates to duplicates are preserved.
-    final seen = <String>{};
-    final dedupedReversed = <Map<String, dynamic>>[];
-    for (final r in _reminders.reversed) {
-      if (!seen.contains(r.id)) {
-        dedupedReversed.add(r.toJson());
-        seen.add(r.id);
-      }
+  final rawHist = prefs.getString(_historyKeyFor(u['username']));
+  if (rawHist != null && rawHist.isNotEmpty) {
+    try {
+      final list = json.decode(rawHist) as List<dynamic>;
+      final tmpHist = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      _history
+        ..clear()
+        ..addAll(tmpHist);
+    } catch (_) {
+      // keep existing history
     }
-    final deduped = dedupedReversed.reversed.toList();
-    final payload = json.encode(deduped);
-    final encrypted = encrypter.encrypt(payload, iv: iv).base64;
-    await prefs.setString(_storageKeyFor(u.username), encrypted);
-    await prefs.setString(_historyKeyFor(u.username), json.encode(_history));
   }
+
+  setState(() {});
+  _loadedOnce = true;
+}
+
+
+Future<void> _saveForCurrentUser() async {
+  final u = AuthService().currentUser;
+  if (u == null) return;
+
+  final prefs = await SharedPreferences.getInstance();
+  final key = await _keyForCurrentUser();
+  if (key == null) return;
+
+  final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
+  final iv = encryptpkg.IV.fromLength(16);
+
+  // Deduplicate reminders by id before saving. Keep the last occurrence
+  // (most recent) so that updates to duplicates are preserved.
+  final seen = <String>{};
+  final dedupedReversed = <Map<String, dynamic>>[];
+
+  for (final r in _reminders.reversed) {
+    if (!seen.contains(r.id)) {
+      dedupedReversed.add(r.toJson());
+      seen.add(r.id);
+    }
+  }
+
+  final deduped = dedupedReversed.reversed.toList();
+  final payload = json.encode(deduped);
+  final encrypted = encrypter.encrypt(payload, iv: iv).base64;
+
+  // ✅ Fixed here: use u['username'] instead of u.username
+  await prefs.setString(_storageKeyFor(u['username']), encrypted);
+  await prefs.setString(_historyKeyFor(u['username']), json.encode(_history));
+}
+
 
   Future<void> _addOrEditReminder({Reminder? existing, int? index}) async {
 
@@ -728,14 +768,19 @@ Future<List<Map<String, dynamic>>> loadTodaysReminderMaps() async {
   final out = <Map<String, dynamic>>[];
   final u = AuthService().currentUser;
   if (u == null) return out;
+
   try {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString('aura_reminders_${u.username}');
+    final raw = prefs.getString('aura_reminders_${u['username']}'); // ✅ fixed here
     if (raw == null || raw.isEmpty) return out;
-    final keyStr = ('${u.passphrase}aura_salt_2025').padRight(32).substring(0,32);
+
+    // ✅ fixed here (use u['passphrase'])
+    final passphrase = u['passphrase'] ?? 'default_pass';
+    final keyStr = ('${passphrase}aura_salt_2025').padRight(32).substring(0, 32);
     final key = encryptpkg.Key.fromUtf8(keyStr);
     final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
     final iv = encryptpkg.IV.fromLength(16);
+
     try {
       final dec = encrypter.decrypt64(raw, iv: iv);
       final list = json.decode(dec) as List<dynamic>;
@@ -744,12 +789,14 @@ Future<List<Map<String, dynamic>>> loadTodaysReminderMaps() async {
         try {
           final m = Map<String, dynamic>.from(e as Map);
           final dt = DateTime.parse(m['dateTime'] as String);
-          if (dt.year == now.year && dt.month == now.month && dt.day == now.day) out.add(m);
+          if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
+            out.add(m);
+          }
         } catch (_) {}
       }
       return out;
     } catch (_) {
-      // try plaintext
+      // fallback for plaintext
       try {
         final list = json.decode(raw) as List<dynamic>;
         final now = DateTime.now();
@@ -757,11 +804,14 @@ Future<List<Map<String, dynamic>>> loadTodaysReminderMaps() async {
           try {
             final m = Map<String, dynamic>.from(e as Map);
             final dt = DateTime.parse(m['dateTime'] as String);
-            if (dt.year == now.year && dt.month == now.month && dt.day == now.day) out.add(m);
+            if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
+              out.add(m);
+            }
           } catch (_) {}
         }
       } catch (_) {}
     }
   } catch (_) {}
+
   return out;
 }
