@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  final String baseUrl = 'http://localhost:5000/api/auth'; // Adjust if needed
+  final String baseUrl = 'http://localhost:5000/api/auth'; 
 
   Map<String, dynamic>? _currentUser;
   Map<String, dynamic>? get currentUser => _currentUser;
@@ -45,12 +45,12 @@ Future<bool> loginUser(String usernameOrEmail, String password) async {
       url,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
-        'username': usernameOrEmail, // ✅ use 'username' instead of 'email'
+        'username': usernameOrEmail, 
         'password': password,
       }),
     );
 
-    print('🔹 Login response: ${response.body}'); // for debugging
+    print('🔹 Login response: ${response.body}'); 
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);

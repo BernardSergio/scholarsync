@@ -51,6 +51,8 @@ final ValueNotifier<int> appointmentsNotifier = ValueNotifier<int>(0);
 // Public helper that shows the same scheduling dialog used in AppointmentsPage
 // and persists the new appointment into SharedPreferences so other pages (Home)
 // can reload and display it immediately.
+// Replace the existing showScheduleAppointmentDialog function in appointments.dart with this:
+
 Future<bool?> showScheduleAppointmentDialog(BuildContext context, {Appointment? existing, int? index}) async {
   final titleCtrl = TextEditingController(text: existing?.title ?? '');
   DateTime? selectedDate = existing?.dateTime ?? DateTime.now();
@@ -186,17 +188,75 @@ Future<bool?> showScheduleAppointmentDialog(BuildContext context, {Appointment? 
                     onPressed: () async {
                       if (selectedDate != null && selectedTime != null) {
                         final dt = DateTime(selectedDate!.year, selectedDate!.month, selectedDate!.day, selectedTime!.hour, selectedTime!.minute);
-                        final appt = Appointment(title: titleCtrl.text.trim().isEmpty ? 'Appointment' : titleCtrl.text.trim(), dateTime: dt, provider: provider, location: location, notes: notes, type: apptType);
-                        // persist to SharedPreferences (append to existing list)
+                        final apptTitle = titleCtrl.text.trim().isEmpty ? 'Appointment' : titleCtrl.text.trim();
+                        
+                        // Close dialog first
+                        Navigator.pop(c, null);
+                        
+                        // Show loading indicator
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (loadingCtx) => const Center(
+                            child: Card(
+                              child: Padding(
+                                padding: EdgeInsets.all(24.0),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    CircularProgressIndicator(),
+                                    SizedBox(height: 16),
+                                    Text('Saving appointment...'),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                        
+                        // CALL THE BACKEND SAVE FUNCTION from home_screen.dart
+                        // We need to import it at the top of appointments.dart
+                        // For now, we'll save locally AND notify the home screen
+                        
+                        // Save to SharedPreferences (local backup)
                         try {
+                          final appt = Appointment(
+                            title: apptTitle,
+                            dateTime: dt,
+                            provider: provider,
+                            location: location,
+                            notes: notes,
+                            type: apptType
+                          );
+                          
                           final prefs = await SharedPreferences.getInstance();
                           final raw = prefs.getString(_appointmentsStorageKey) ?? '[]';
                           final list = json.decode(raw) as List<dynamic>;
                           list.insert(0, appt.toJson());
                           await prefs.setString(_appointmentsStorageKey, json.encode(list));
-                            try { appointmentsNotifier.value = appointmentsNotifier.value + 1; } catch (_) {}
-                        } catch (_) {}
-                        Navigator.pop(c, true);
+                          
+                          // Notify listeners
+                          try { appointmentsNotifier.value = appointmentsNotifier.value + 1; } catch (_) {}
+                          
+                          // Close loading
+                          Navigator.pop(context);
+                          
+                          // Show success
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Appointment scheduled successfully!'),
+                              backgroundColor: Colors.green,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        } catch (e) {
+                          // Close loading
+                          Navigator.pop(context);
+                          
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Error: $e')),
+                          );
+                        }
                       }
                     },
                     style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00796B), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),

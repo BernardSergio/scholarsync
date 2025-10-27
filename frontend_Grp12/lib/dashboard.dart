@@ -21,6 +21,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
   double _monthAdherencePercent = 0.0;
   final Map<int,double> _weeklyAdherencePct = {}; 
   final Map<String,double> _moodByDate = {}; 
+  final Map<String,List<String>> _sideEffectsByDate = {}; // NEW: side effects
 
   late TabController _tabController;
   String? _username; // store the current logged-in user's username
@@ -123,6 +124,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     }
 
     await _loadMoodData();
+    await _loadSideEffectsData(); // NEW
     setState(() {});
   }
 
@@ -164,6 +166,28 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     } catch (_) {}
   }
 
+  // NEW: Load side effects
+  Future<void> _loadSideEffectsData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      const key = 'aura_journal_entries';
+      final raw = prefs.getString(key) ?? '[]';
+      final list = json.decode(raw) as List<dynamic>;
+      _sideEffectsByDate.clear();
+      for (final e in list) {
+        try {
+          final m = Map<String, dynamic>.from(e as Map);
+          final type = (m['type'] ?? 0) as int;
+          if (type != 1) continue; // 1 = side effect
+          final dt = DateTime.parse(m['dateTime'] as String).toLocal();
+          final keyDate = DateFormat('yyyy-MM-dd').format(dt);
+          final description = (m['body'] ?? '').toString();
+          _sideEffectsByDate.putIfAbsent(keyDate, () => []).add(description);
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
   void _prevMonth() {
     setState(() {
       _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month - 1);
@@ -192,11 +216,34 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     final items = _dayDetails[key] ?? [];
     showDialog(context: context, builder: (c) => AlertDialog(
       title: Text(DateFormat.yMMMMd().format(date)),
-      content: items.isEmpty ? const Text('No reminders or logs for this day.') : SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: items.map((m) {
-        final taken = m['takenAt'] != null;
-        final time = DateFormat.jm().format(DateTime.parse(m['dateTime']));
-        return ListTile(title: Text('${m['medication']} • ${m['dosage']}'), subtitle: Text(time), trailing: Text(taken ? 'Taken' : 'Scheduled'));
-      }).toList())),
+      content: items.isEmpty && (_sideEffectsByDate[key]?.isEmpty ?? true)
+          ? const Text('No reminders, logs, or side effects for this day.')
+          : SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ...items.map((m) {
+                    final taken = m['takenAt'] != null;
+                    final time = DateFormat.jm().format(DateTime.parse(m['dateTime']));
+                    return ListTile(
+                      title: Text('${m['medication']} • ${m['dosage']}'),
+                      subtitle: Text(time),
+                      trailing: Text(taken ? 'Taken' : 'Scheduled'),
+                    );
+                  }),
+                  if (_sideEffectsByDate[key]?.isNotEmpty ?? false) ...[
+                    const Divider(),
+                    const Text('Side Effects:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ..._sideEffectsByDate[key]!.map((s) => Text('- $s')),
+                  ],
+                  if (_moodByDate[key] != null) ...[
+                    const Divider(),
+                    Text('Mood: ${_moodByDate[key]!.toStringAsFixed(1)}/10', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ],
+                ],
+              ),
+            ),
       actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Close'))],
     ));
   }
@@ -206,14 +253,13 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     final startWeekday = firstOfMonth.weekday % 7; // 0=Sun..6=Sat
     final daysInMonth = DateTime(_visibleMonth.year, _visibleMonth.month + 1, 0).day;
     final rows = <Widget>[];
-  // int day unused
-    // build 6 rows of 7 days
+
     for (int r = 0; r < 6; r++) {
       final rowChildren = <Widget>[];
       for (int c = 0; c < 7; c++) {
         final cellIndex = r * 7 + c;
-        Widget child;
         final cellDay = cellIndex - startWeekday + 1;
+        Widget child;
         if (cellDay < 1 || cellDay > daysInMonth) {
           child = const SizedBox.shrink();
         } else {
@@ -245,7 +291,6 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
           const SizedBox(width:8),
           Container(padding: const EdgeInsets.symmetric(horizontal:12, vertical:6), decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(12)), child: const Text('No data')),
           const SizedBox(width:12),
-          // month adherence percent
           Container(padding: const EdgeInsets.symmetric(horizontal:12, vertical:6), decoration: BoxDecoration(color: Colors.teal.shade50, borderRadius: BorderRadius.circular(12)), child: Text(_monthAdherencePercent > 0 ? '${_monthAdherencePercent.toStringAsFixed(0)}% adherence' : 'No adherence data'))
         ]),
       ]),
@@ -257,9 +302,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
   }
 
   Widget _buildTrends() {
-    // Build calendar-week (Sun-Sat) buckets for the visible month
-    final Map<int, List<String>> weekToDates = {}; // weekIndex -> list of yyyy-MM-dd
-    // find the first Sunday on or before the first of month
+    final Map<int, List<String>> weekToDates = {};
     final firstOfMonth = DateTime(_visibleMonth.year, _visibleMonth.month, 1);
     DateTime start = firstOfMonth.subtract(Duration(days: (firstOfMonth.weekday % 7)));
     int weekIndex = 0;
@@ -276,7 +319,6 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       if (start.isAfter(DateTime(_visibleMonth.year, _visibleMonth.month + 1, 1).subtract(const Duration(days:1)))) break;
     }
 
-    // compute pct per week and build bars with fixed vertical sections to avoid overflow
     final List<double> weekPcts = [];
     final bars = <Widget>[];
     for (final e in weekToDates.entries) {
@@ -297,7 +339,6 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       final barHeight = (pct / 100.0) * maxBar;
 
       bars.add(
-        // each bar column has fixed vertical pieces: percent label, bar area, week label
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6.0),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -310,7 +351,6 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       );
     }
 
-    // Mood values for last 7 days (0..10)
     final today = DateTime.now();
     final last7 = List.generate(7, (i) => DateTime(today.year, today.month, today.day).subtract(Duration(days: 6 - i)));
     final moodValues = <double>[];
@@ -320,8 +360,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       moodValues.add(v);
     }
 
-    // if there is no adherence info at all, show a friendly message instead of empty zero-bars
-  final hasAnyWeekData = weekToDates.isNotEmpty && weekPcts.any((p) => p > 0 || p == 0 && _dayStatus.values.any((s) => s == DayStatus.missed));
+    final hasAnyWeekData = weekToDates.isNotEmpty && weekPcts.any((p) => p > 0 || p == 0 && _dayStatus.values.any((s) => s == DayStatus.missed));
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Text('Medication Adherence Trends', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -332,89 +371,44 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
         SizedBox(height: 200, child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, crossAxisAlignment: CrossAxisAlignment.stretch, children: bars)),
       ],
       const SizedBox(height: 16),
-      const Text('Mood (last 7 days)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-      const SizedBox(height: 8),
-      SizedBox(height: 180, child: Padding(padding: const EdgeInsets.symmetric(horizontal:8.0), child: _SimpleSparkline(values: moodValues, labels: last7.map((d)=>DateFormat('E').format(d)).toList()))),
+      const Text('Mood Last 7 Days', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 12),
+      SizedBox(
+        height: 120,
+        child: Row(
+          children: last7.map((d) {
+            final k = DateFormat('yyyy-MM-dd').format(d);
+            final val = _moodByDate[k] ?? 0.0;
+            final barHeight = (val / 10.0) * 100.0;
+            return Expanded(
+              child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
+                Text(val>0?val.toStringAsFixed(1):'', style: const TextStyle(fontSize:12)),
+                const SizedBox(height:4),
+                Container(width: 24, height: barHeight, decoration: BoxDecoration(color: Colors.orange, borderRadius: BorderRadius.circular(4))),
+                const SizedBox(height:4),
+                Text(DateFormat.E().format(d), style: const TextStyle(fontSize:12)),
+              ]),
+            );
+          }).toList(),
+        ),
+      ),
     ]);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_username == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Welcome, $_username!', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        TabBar(controller: _tabController, tabs: const [Tab(text: 'Calendar'), Tab(text: 'Trends')], labelColor: Colors.teal, unselectedLabelColor: Colors.grey),
-        const SizedBox(height: 12),
-        Expanded(child: TabBarView(controller: _tabController, children: [
-          SingleChildScrollView(child: _buildCalendar()),
-          SingleChildScrollView(child: Padding(padding: const EdgeInsets.all(8.0), child: _buildTrends())),
-        ])),
-      ]),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Dashboard'),
+        bottom: TabBar(controller: _tabController, tabs: const [Tab(text: 'Calendar'), Tab(text: 'Trends')]),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          SingleChildScrollView(padding: const EdgeInsets.all(12), child: _buildCalendar()),
+          SingleChildScrollView(padding: const EdgeInsets.all(12), child: _buildTrends()),
+        ],
+      ),
     );
   }
-  }
-
-  class _SimpleSparkline extends StatelessWidget {
-  final List<double> values;
-  final List<String>? labels;
-  const _SimpleSparkline({required this.values, this.labels});
-
-  @override
-  Widget build(BuildContext context) {
-      final bool hasAny = values.any((v) => v != 0.0);
-      if (!hasAny) {
-        return Column(children: [
-          Expanded(child: Center(child: Text('No mood data', style: TextStyle(color: Colors.grey[700])))),
-          const SizedBox(height:6),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: List.generate(values.length, (i) => Expanded(child: Center(child: Text(labels?[i] ?? '', style: const TextStyle(fontSize:10))))))
-        ]);
-      }
-
-      return Column(children: [
-        Expanded(child: CustomPaint(painter: _SparklinePainter(values), size: Size.infinite)),
-        const SizedBox(height:6),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: List.generate(values.length, (i) => Expanded(child: Center(child: Text(labels?[i] ?? '', style: const TextStyle(fontSize:10))))))
-      ]);
-  }
-}
-
-class _SparklinePainter extends CustomPainter {
-  final List<double> values;
-  _SparklinePainter(this.values);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.purpleAccent
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5;
-
-    final dotPaint = Paint()..color = Colors.purpleAccent;
-
-    if (values.isEmpty) return;
-    final double w = size.width;
-    final double h = size.height;
-    final double step = w / (values.length - 1 == 0 ? 1 : (values.length - 1));
-    Path path = Path();
-    for (int i = 0; i < values.length; i++) {
-      final x = step * i;
-      final y = h - (values[i].clamp(0.0, 10.0) / 10.0) * (h - 10);
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-      canvas.drawCircle(Offset(x, y), 3.5, dotPaint);
-    }
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _SparklinePainter oldDelegate) => oldDelegate.values != values;
 }
