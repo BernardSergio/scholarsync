@@ -4,6 +4,10 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:encrypt/encrypt.dart' as encryptpkg;
 import 'auth_service.dart';
+import 'reminders.dart';
+
+// Fixed IV for consistent encryption/decryption across the app
+final _fixedIV = encryptpkg.IV.fromUtf8('aura_fixed_iv_2025'.padRight(16).substring(0, 16));
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -13,6 +17,35 @@ class DashboardPage extends StatefulWidget {
 }
 
 enum DayStatus { taken, missed, nodata }
+
+  /// Enhanced medication tracking diagnostics
+String explainDayStatus(DateTime day, DayStatus? status, List<Map<String,dynamic>>? details) {
+  final key = DateFormat('yyyy-MM-dd').format(day);
+  final now = DateTime.now();
+  final dayStart = DateTime(day.year, day.month, day.day);
+  final nowDayStart = DateTime(now.year, now.month, now.day);
+  final isPast = dayStart.isBefore(nowDayStart);
+  final isToday = dayStart.isAtSameMomentAs(nowDayStart);
+  
+  final sb = StringBuffer();
+  sb.writeln('📅 Status for $key');
+  sb.writeln('Current status: ${status?.toString() ?? 'No Status'}');
+  if (isPast) sb.writeln('⏪ Past day');
+  if (isToday) sb.writeln('📍 Today');  if (details != null && details.isNotEmpty) {
+    sb.writeln('Details:');
+    for (final d in details) {
+      try {
+        final dt = DateTime.parse(d['dateTime'] as String);
+        final taken = d['takenAt'] != null;
+        sb.writeln('- ${d['medication'] ?? 'Unknown med'} @ ${DateFormat.jm().format(dt)}: ${taken ? 'Taken' : 'Not taken'}');
+      } catch (_) {}
+    }
+  } else {
+    sb.writeln('No reminder details found');
+  }
+  
+  return sb.toString();
+}
 
 class _DashboardPageState extends State<DashboardPage> with SingleTickerProviderStateMixin {
   DateTime _visibleMonth = DateTime(DateTime.now().year, DateTime.now().month);
@@ -29,6 +62,32 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadDataForMonth(_visibleMonth);
+    try { remindersNotifier.addListener(_onRemindersChanged); } catch (_) {}
+    // Also reload when becoming visible (e.g., switching to Dashboard tab)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        final ancestor = context.findAncestorWidgetOfExactType<Navigator>();
+        if (ancestor != null) {
+          _loadDataForMonth(_visibleMonth);
+        }
+      } catch (_) {}
+    });
+  }
+
+  @override
+  void dispose() {
+    try { remindersNotifier.removeListener(_onRemindersChanged); } catch (_) {}
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  void _onRemindersChanged() {
+    // reload the visible month when reminders change
+    _loadDataForMonth(_visibleMonth);
+    // Debug: print what changed
+    try {
+      debugPrint('Dashboard: Reminders changed notification received, reloading month ${DateFormat.yMMM().format(_visibleMonth)}');
+    } catch (_) {}
   }
 
   Future<encryptpkg.Key?> _keyForUser() async {
@@ -41,55 +100,129 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
   Future<void> _loadDataForMonth(DateTime month) async {
     _dayStatus.clear();
     _dayDetails.clear();
+
     final u = AuthService().currentUser;
     if (u == null) { setState(() {}); return; }
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString('aura_reminders_${u.username}');
-    if (raw == null || raw.isEmpty) { setState(() {}); return; }
 
-    String decoded = raw;
-    try {
-      final key = await _keyForUser();
-      if (key != null) {
-        final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
-        final iv = encryptpkg.IV.fromLength(16);
-        decoded = encrypter.decrypt64(raw, iv: iv);
+    debugPrint('Loading data for ${DateFormat.yMMM().format(month)}');
+    final prefs = await SharedPreferences.getInstance();
+
+    // helper to decode (decrypt) stored JSON if possible, else return plaintext parse
+    Future<List<dynamic>> _decodeList(String? raw) async {
+      if (raw == null || raw.isEmpty) return <dynamic>[];
+      // try decrypt
+      try {
+        final key = await _keyForUser();
+        if (key != null) {
+          final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
+          final dec = encrypter.decrypt64(raw, iv: _fixedIV);
+          return json.decode(dec) as List<dynamic>;
+        }
+      } catch (_) {}
+      // fallback plaintext
+      try {
+        return json.decode(raw) as List<dynamic>;
+      } catch (_) {
+        return <dynamic>[];
       }
-    } catch (_) {
-      // fallback: treat raw as plaintext JSON
-      decoded = raw;
     }
 
     int totalForMonth = 0;
     int takenForMonth = 0;
-    try {
-      final list = json.decode(decoded) as List<dynamic>;
-      final now = DateTime.now();
-      // Build a map of statuses per day for this month
-      for (final e in list) {
-        try {
-          final m = Map<String,dynamic>.from(e as Map);
-          final dt = DateTime.parse(m['dateTime'] as String).toLocal();
-          final key = DateFormat('yyyy-MM-dd').format(dt);
-          final taken = m['takenAt'] != null;
-          // record details
-          _dayDetails.putIfAbsent(key, () => []).add(m);
-          // determine status: taken wins, else missed if past and not taken
-          final dayStart = DateTime(dt.year, dt.month, dt.day);
-          final nowDayStart = DateTime(now.year, now.month, now.day);
+
+    // Load active reminders
+    final rawRem = prefs.getString('aura_reminders_${u.username}');
+    final remList = await _decodeList(rawRem);
+    try { debugPrint('Dashboard: loaded ${remList.length} reminders for user ${u.username}'); } catch (_) {}
+    final now = DateTime.now();
+
+    for (final e in remList) {
+      try {
+        final Map<String, dynamic> m = Map<String, dynamic>.from(e as Map);
+        try { debugPrint('Dashboard: reminder raw dateTime=${m['dateTime']}'); } catch (_) {}
+        if (m['dateTime'] == null) continue;
+        final dt = DateTime.parse(m['dateTime'] as String).toLocal();
+        try { debugPrint('Dashboard: parsed dt=$dt'); } catch (_) {}
+        final key = DateFormat('yyyy-MM-dd').format(dt);
+        try { debugPrint('Dashboard: computed key=$key'); } catch (_) {}
+
+        // normalize fields: ensure 'takenAt' key exists (null if none)
+        final entry = {
+          'id': m['id'] ?? '',
+          'medication': m['medication'] ?? '',
+          'dosage': m['dosage'] ?? '',
+          'dateTime': (m['dateTime'] ?? '').toString(),
+          'takenAt': m['takenAt'] ?? null,
+          'source': 'reminder'
+        };
+        _dayDetails.putIfAbsent(key, () => []).add(entry);
+
+        // Update status for visible month
+        final dayStart = DateTime(dt.year, dt.month, dt.day);
+        final nowDayStart = DateTime(now.year, now.month, now.day);
+        if (dayStart.month == month.month && dayStart.year == month.year) {
+          final taken = entry['takenAt'] != null;
           if (taken) {
             _dayStatus[key] = DayStatus.taken;
-            if (dayStart.month == month.month && dayStart.year == month.year) { takenForMonth++; totalForMonth++; }
-          } else if (dayStart.isBefore(nowDayStart) && dayStart.month == month.month && dayStart.year == month.year) {
-            // if the scheduled time is earlier than now and not taken -> missed
-            _dayStatus.putIfAbsent(key, () => DayStatus.missed);
+            takenForMonth++;
             totalForMonth++;
+          } else if (dayStart.isBefore(nowDayStart)) {
+            // past and not taken
+            if (_dayStatus[key] != DayStatus.taken) {
+              _dayStatus[key] = DayStatus.missed;
+              totalForMonth++;
+            }
+          } else if (dayStart.isAtSameMomentAs(nowDayStart)) {
+            // today: if scheduled time passed -> missed, else pending
+            if (dt.isBefore(now)) {
+              if (_dayStatus[key] != DayStatus.taken) {
+                _dayStatus[key] = DayStatus.missed;
+                totalForMonth++;
+              }
+            } else {
+              // Future reminders for today - mark as pending and count them
+              if (_dayStatus[key] == null) {
+                _dayStatus[key] = DayStatus.nodata;
+              }
+              totalForMonth++;  // Count future reminders!
+            }
           } else {
-            _dayStatus.putIfAbsent(key, () => DayStatus.nodata);
+            _dayStatus[key] = DayStatus.nodata;
           }
-        } catch (_) {}
-      }
-    } catch (_) {}
+        }
+      } catch (_) {}
+    }
+
+    // Load reminder history (taken entries)
+    final rawHist = prefs.getString('aura_reminder_history_${u.username}');
+    final histList = await _decodeList(rawHist);
+    for (final h in histList) {
+      try {
+        final Map<String, dynamic> hm = Map<String, dynamic>.from(h as Map);
+        if ((hm['status'] ?? '') == 'taken' && hm['when'] != null) {
+          final dt = DateTime.parse(hm['when'] as String).toLocal();
+          final key = DateFormat('yyyy-MM-dd').format(dt);
+          final entry = {
+            'id': hm['id'] ?? '',
+            'medication': hm['medication'] ?? '',
+            'dosage': hm['dosage'] ?? '',
+            'dateTime': hm['when'],
+            'takenAt': hm['when'],
+            'source': 'history'
+          };
+          _dayDetails.putIfAbsent(key, () => []).add(entry);
+          // mark taken if not already
+          if (_dayStatus[key] != DayStatus.taken) {
+            final dayStart = DateTime(dt.year, dt.month, dt.day);
+            if (dayStart.month == month.month && dayStart.year == month.year) {
+              takenForMonth++;
+              totalForMonth++;
+            }
+            _dayStatus[key] = DayStatus.taken;
+          }
+        }
+      } catch (_) {}
+    }
 
     // compute monthly adherence percent
     if (totalForMonth > 0) {
@@ -98,7 +231,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       _monthAdherencePercent = 0.0;
     }
 
-    // compute weekly adherence buckets for visible month (4 weeks)
+    // compute weekly adherence buckets (4-week simple slices)
     _weeklyAdherencePct.clear();
     final days = DateTime(month.year, month.month + 1, 0).day;
     for (int w = 0; w < 4; w++) {
@@ -118,7 +251,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     }
 
     // load mood entries for the last 7 days
-  await _loadMoodData();
+    await _loadMoodData();
 
     setState(() {});
   }
@@ -180,27 +313,229 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     });
   }
 
-  Color _colorForStatus(DayStatus? s) {
-    switch (s) {
-      case DayStatus.taken: return Colors.green.shade300;
-      case DayStatus.missed: return Colors.red.shade200;
-      case DayStatus.nodata: return Colors.grey.shade300;
-      default: return Colors.grey.shade200;
-    }
+  // Enhanced color and style handling for day status
+  Map<String, dynamic> _styleForStatus(DayStatus? s, bool isToday) {
+    final baseColor = {
+      DayStatus.taken: Colors.green,
+      DayStatus.missed: Colors.red,
+      DayStatus.nodata: Colors.grey,
+    }[s] ?? Colors.grey;
+
+    return {
+      'color': isToday 
+          ? baseColor.shade100  // Lighter shade for today
+          : s == DayStatus.taken 
+              ? baseColor.shade300
+              : s == DayStatus.missed
+                  ? baseColor.shade200
+                  : Colors.grey.shade300,
+      'borderColor': isToday ? baseColor : Colors.transparent,
+      'icon': s == DayStatus.taken 
+          ? Icons.check_circle_outline
+          : s == DayStatus.missed 
+              ? Icons.cancel_outlined
+              : null,
+      'iconColor': isToday ? baseColor : baseColor.shade700,
+    };
   }
 
-  void _showDayDetails(DateTime date) {
+  Future<void> _showDayDetails(DateTime date) async {
     final key = DateFormat('yyyy-MM-dd').format(date);
-    final items = _dayDetails[key] ?? [];
-    showDialog(context: context, builder: (c) => AlertDialog(
-      title: Text(DateFormat.yMMMMd().format(date)),
-      content: items.isEmpty ? const Text('No reminders or logs for this day.') : SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: items.map((m) {
+    final items = List<Map<String, dynamic>>.from(_dayDetails[key] ?? []);
+
+    // Fallback: if no items in memory for this day, attempt to read from
+    // SharedPreferences (decrypting if necessary) and collect reminders/history
+    // that match the selected date. This handles cases where stored DateTime
+    // strings may parse to a different calendar date due to timezone offsets.
+    if (items.isEmpty) {
+      try {
+        final u = AuthService().currentUser;
+        if (u != null) {
+          final prefs = await SharedPreferences.getInstance();
+          // helper to decode a stored key (encrypted or plaintext)
+          Future<List<dynamic>> _decode(String? raw) async {
+            if (raw == null || raw.isEmpty) return <dynamic>[];
+            try {
+              final keyStr = ('${u.passphrase}aura_salt_2025').padRight(32).substring(0,32);
+              final key = encryptpkg.Key.fromUtf8(keyStr);
+              final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
+              final dec = encrypter.decrypt64(raw, iv: _fixedIV);
+              return json.decode(dec) as List<dynamic>;
+            } catch (_) {
+              try {
+                return json.decode(raw) as List<dynamic>;
+              } catch (_) {
+                return <dynamic>[];
+              }
+            }
+          }
+
+          // reminders
+          final rawRem = prefs.getString('aura_reminders_${u.username}');
+          final remList = await _decode(rawRem);
+          for (final e in remList) {
+            try {
+              final m = Map<String, dynamic>.from(e as Map);
+              if (m['dateTime'] == null) continue;
+              final dt = DateTime.parse(m['dateTime'] as String).toLocal();
+              if (dt.year == date.year && dt.month == date.month && dt.day == date.day) {
+                items.add({
+                  'id': m['id'] ?? '',
+                  'medication': m['medication'] ?? '',
+                  'dosage': m['dosage'] ?? '',
+                  'dateTime': (m['dateTime'] ?? '').toString(),
+                  'takenAt': m['takenAt'] ?? null,
+                  'source': 'reminder'
+                });
+              }
+            } catch (_) {}
+          }
+
+          // history
+          final rawHist = prefs.getString('aura_reminder_history_${u.username}');
+          final histList = await _decode(rawHist);
+          for (final h in histList) {
+            try {
+              final hm = Map<String, dynamic>.from(h as Map);
+              if ((hm['status'] ?? '') == 'taken' && hm['when'] != null) {
+                final dt = DateTime.parse(hm['when'] as String).toLocal();
+                if (dt.year == date.year && dt.month == date.month && dt.day == date.day) {
+                  items.add({
+                    'id': hm['id'] ?? '',
+                    'medication': hm['medication'] ?? '',
+                    'dosage': hm['dosage'] ?? '',
+                    'dateTime': hm['when'],
+                    'takenAt': hm['when'],
+                    'source': 'history'
+                  });
+                }
+              }
+            } catch (_) {}
+          }
+        }
+      } catch (_) {}
+    }
+    
+    // Calculate adherence stats for this day
+    int takenCount = 0;
+    int takenOnTime = 0;
+    int missedCount = 0;
+    
+    final now = DateTime.now();
+    for (final m in items) {
+      try {
+        final scheduled = DateTime.parse(m['dateTime'] as String).toLocal();
         final taken = m['takenAt'] != null;
-        final time = DateFormat.jm().format(DateTime.parse(m['dateTime']));
-        return ListTile(title: Text('${m['medication']} • ${m['dosage']}'), subtitle: Text(time), trailing: Text(taken ? 'Taken' : 'Scheduled'));
-      }).toList())),
-      actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Close'))],
-    ));
+        if (taken) {
+          takenCount++;
+          final takenAt = DateTime.parse(m['takenAt'] as String).toLocal();
+          if (takenAt.difference(scheduled).inHours.abs() <= 2) {
+            takenOnTime++;
+          }
+        } else {
+          // Only count as missed if the scheduled time is in the past
+          if (scheduled.isBefore(now)) {
+            missedCount++;
+          }
+        }
+      } catch (_) {}
+    }
+    
+    showDialog(
+      context: context, 
+      builder: (c) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.calendar_today, color: Colors.teal),
+            const SizedBox(width: 8),
+            Text(DateFormat.yMMMMd().format(date)),
+          ]
+        ),
+        content: items.isEmpty 
+          ? const Text('No medications scheduled for this day.')
+          : SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Daily Summary Card
+                  if (items.isNotEmpty) Card(
+                    color: Colors.teal.shade50,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Daily Summary', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          Text('✅ Taken: $takenCount (${takenOnTime} on time)'),
+                          Text('❌ Missed: $missedCount'),
+                          if (items.isNotEmpty) Text(
+                            '📊 Adherence: ${(takenCount / items.length * 100).toStringAsFixed(1)}%',
+                            style: TextStyle(fontWeight: FontWeight.w500)
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Medication List
+                  ...items.map((m) {
+                    final scheduled = DateTime.parse(m['dateTime'] as String).toLocal();
+                    final taken = m['takenAt'] != null;
+                    final takenAt = taken ? DateTime.parse(m['takenAt'] as String).toLocal() : null;
+                    final nowLocal = DateTime.now();
+                    final onTime = taken && takenAt != null && takenAt.difference(scheduled).inHours.abs() <= 2;
+
+                    Color statusColor;
+                    String statusText;
+                    if (taken) {
+                      statusColor = onTime ? Colors.green : Colors.orange;
+                      statusText = onTime ? '✅ Taken on time' : '⚠️ Taken ${DateFormat.jm().format(takenAt!)}';
+                    } else {
+                      if (scheduled.isBefore(nowLocal)) {
+                        statusColor = Colors.red;
+                        statusText = '❌ Missed';
+                      } else {
+                        statusColor = Colors.grey.shade700;
+                        statusText = '⏳ Scheduled';
+                      }
+                    }
+
+                    return Card(
+                      child: ListTile(
+                        title: Text(
+                          '${m['medication']} • ${m['dosage']}',
+                          style: TextStyle(fontWeight: FontWeight.w500)
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Scheduled: ${DateFormat.jm().format(scheduled)}'),
+                            Text(
+                              statusText,
+                              style: TextStyle(
+                                color: statusColor,
+                                fontWeight: FontWeight.w500
+                              )
+                            ),
+                          ],
+                        ),
+                        isThreeLine: true,
+                      ),
+                    );
+                  }).toList(),
+                ],
+              )
+            ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c), 
+            child: const Text('Close')
+          )
+        ],
+      )
+    );
   }
 
   Widget _buildCalendar() {
@@ -214,25 +549,78 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       final rowChildren = <Widget>[];
       for (int c = 0; c < 7; c++) {
         final cellIndex = r * 7 + c;
-        Widget child;
         final cellDay = cellIndex - startWeekday + 1;
+        Widget cellWidget;
         if (cellDay < 1 || cellDay > daysInMonth) {
-          child = const SizedBox.shrink();
+          cellWidget = const SizedBox.shrink();
         } else {
           final date = DateTime(_visibleMonth.year, _visibleMonth.month, cellDay);
           final key = DateFormat('yyyy-MM-dd').format(date);
           final status = _dayStatus[key];
-          child = GestureDetector(
-            onTap: () => _showDayDetails(date),
+          final today = DateTime.now();
+          final isToday = date.year == today.year && date.month == today.month && date.day == today.day;
+          final style = _styleForStatus(status, isToday);
+          final details = _dayDetails[key] ?? [];
+          
+          // Calculate completion for the day
+          int total = details.length;
+          int taken = details.where((d) => d['takenAt'] != null).length;
+          double completionRate = total > 0 ? taken / total : 0.0;
+          
+          cellWidget = GestureDetector(
+            onTap: () {
+              final debug = explainDayStatus(date, status, details);
+              debugPrint(debug);
+              _showDayDetails(date);
+            },
             child: Container(
               margin: const EdgeInsets.all(6),
-              decoration: BoxDecoration(color: _colorForStatus(status), borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(
+                color: style['color'] as Color,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: style['borderColor'] as Color,
+                  width: isToday ? 2 : 0
+                ),
+              ),
               height: 84,
-              child: Center(child: Text('$cellDay', style: const TextStyle(fontWeight: FontWeight.bold))),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '$cellDay',
+                    style: TextStyle(
+                      fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                      fontSize: isToday ? 16 : 14
+                    )
+                  ),
+                  if (style['icon'] != null) Icon(
+                    style['icon'] as IconData,
+                    color: style['iconColor'] as Color,
+                    size: 16
+                  ),
+                  if (total > 0) Container(
+                    margin: const EdgeInsets.only(top: 4),
+                    width: 24,
+                    height: 3,
+                    decoration: BoxDecoration(
+                      color: style['iconColor'] as Color,
+                      borderRadius: BorderRadius.circular(2),
+                      gradient: LinearGradient(
+                        colors: [
+                          style['iconColor'] as Color,
+                          Colors.grey.shade300
+                        ],
+                        stops: [completionRate, completionRate],
+                      )
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         }
-        rowChildren.add(Expanded(child: child));
+        rowChildren.add(Expanded(child: cellWidget));
       }
       rows.add(Row(children: rowChildren));
     }
@@ -259,11 +647,13 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
   }
 
   Widget _buildTrends() {
-    // Build calendar-week (Sun-Sat) buckets for the visible month
+    // Build calendar-week (Mon-Sun) buckets for the visible month
     final Map<int, List<String>> weekToDates = {}; // weekIndex -> list of yyyy-MM-dd
-    // find the first Sunday on or before the first of month
+    // find the first Monday on or before the first of month
     final firstOfMonth = DateTime(_visibleMonth.year, _visibleMonth.month, 1);
-    DateTime start = firstOfMonth.subtract(Duration(days: (firstOfMonth.weekday % 7)));
+    // Calculate days to subtract to get to Monday (1=Mon, 7=Sun)
+    final daysToMonday = ((firstOfMonth.weekday - 1) % 7);
+    DateTime start = firstOfMonth.subtract(Duration(days: daysToMonday));
     int weekIndex = 0;
     while (start.month <= _visibleMonth.month || start.isBefore(firstOfMonth.add(const Duration(days: 35)))) {
       final weekDates = <String>[];
@@ -278,36 +668,146 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       if (start.isAfter(DateTime(_visibleMonth.year, _visibleMonth.month + 1, 1).subtract(const Duration(days:1)))) break;
     }
 
-    // compute pct per week and build bars with fixed vertical sections to avoid overflow
-    final List<double> weekPcts = [];
-    final bars = <Widget>[];
+    // Enhanced weekly trends calculation with detailed stats
+    final List<Map<String, dynamic>> weekStats = [];
+    final List<Widget> bars = [];
+    
     for (final e in weekToDates.entries) {
       final wk = e.key;
       final dates = e.value;
       int wkTotal = 0;
       int wkTaken = 0;
+      int wkTakenOnTime = 0;
+      int totalMeds = 0;
+      
+      // Analyze each day in the week
       for (final k in dates) {
-        final s = _dayStatus[k];
-        if (s != null && s != DayStatus.nodata) {
-          wkTotal++;
-          if (s == DayStatus.taken) wkTaken++;
+        final details = _dayDetails[k] ?? [];
+        for (final med in details) {
+          totalMeds++;
+          final scheduled = DateTime.parse(med['dateTime'] as String);
+          final taken = med['takenAt'] != null;
+          if (taken) {
+            wkTaken++;
+            // Check if taken within 2 hours of scheduled time
+            final takenAt = DateTime.parse(med['takenAt'] as String);
+            if (takenAt.difference(scheduled).inHours.abs() <= 2) {
+              wkTakenOnTime++;
+            }
+          }
         }
+        if (details.isNotEmpty) wkTotal++;
       }
-      final pct = wkTotal == 0 ? 0.0 : (wkTaken / wkTotal) * 100.0;
-      weekPcts.add(pct);
+      
+      final stats = {
+        'week': wk,
+        'dates': dates,
+        'daysWithMeds': wkTotal,
+        'totalMeds': totalMeds,
+        'takenMeds': wkTaken,
+        'takenOnTime': wkTakenOnTime,
+        'adherenceRate': totalMeds > 0 ? (wkTaken / totalMeds) * 100.0 : 0.0,
+        'onTimeRate': wkTaken > 0 ? (wkTakenOnTime / wkTaken) * 100.0 : 0.0
+      };
+      weekStats.add(stats);
+      
+  final adherencePct = stats['adherenceRate'] as double;
       final double maxBar = 120.0;
-      final barHeight = (pct / 100.0) * maxBar;
+      final barHeight = (adherencePct / 100.0) * maxBar;
 
+      // Create an enhanced bar visualization with adherence data
       bars.add(
-        // each bar column has fixed vertical pieces: percent label, bar area, week label
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6.0),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            SizedBox(height: 18, child: Center(child: Text('${pct.toStringAsFixed(0)}%', style: const TextStyle(fontSize: 12)))),
-            SizedBox(height: maxBar, width: 48, child: Align(alignment: Alignment.bottomCenter, child: Container(height: barHeight, width: 36, decoration: BoxDecoration(color: Colors.teal, borderRadius: BorderRadius.circular(6))))),
-            const SizedBox(height:6),
-            SizedBox(height: 16, child: Center(child: Text('W$wk', style: const TextStyle(fontSize: 12))))
-          ]),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Adherence percentage
+              SizedBox(
+                height: 18,
+                child: Center(
+                  child: Text(
+                    '${adherencePct.toStringAsFixed(0)}%',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: adherencePct >= 80 ? Colors.green.shade700 
+                           : adherencePct >= 50 ? Colors.orange.shade700
+                           : Colors.red.shade700
+                    )
+                  )
+                )
+              ),
+              // Bar visualization
+              SizedBox(
+                height: maxBar,
+                width: 48,
+                child: Stack(
+                  children: [
+                    // Main adherence bar
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Container(
+                        height: barHeight,
+                        width: 36,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.teal.shade300,
+                              Colors.teal.shade500,
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(6),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 2,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // On-time marker
+                    if (((stats['takenOnTime'] as int?) ?? 0) > 0)
+                      Positioned(
+                        bottom: ((stats['onTimeRate'] as double?) ?? 0.0) / 100.0 * maxBar - 2,
+                        left: 12,
+                        child: Container(
+                          width: 24,
+                          height: 2,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(1),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 6),
+              // Week label with medication count
+              SizedBox(
+                height: 32,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('W$wk', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    if (((stats['totalMeds'] as int?) ?? 0) > 0)
+                      Text(
+                        '${stats['takenMeds'] as int}/${stats['totalMeds'] as int}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey.shade600
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -323,10 +823,18 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     }
 
     // if there is no adherence info at all, show a friendly message instead of empty zero-bars
-  final hasAnyWeekData = weekToDates.isNotEmpty && weekPcts.any((p) => p > 0 || p == 0 && _dayStatus.values.any((s) => s == DayStatus.missed));
+  final hasAnyWeekData = weekStats.any((stats) => (stats['totalMeds'] as int) > 0);
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Medication Adherence Trends', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+      Row(children: [
+        const Expanded(child: Text('Medication Adherence Trends', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+        // seed demo data button for quick visual verification
+        OutlinedButton.icon(
+          onPressed: _seedDemoData,
+          icon: const Icon(Icons.bug_report, size: 16),
+          label: const Text('Seed demo data'),
+        ),
+      ]),
       const SizedBox(height: 12),
       if (!hasAnyWeekData) ...[
         SizedBox(height: 120, child: Center(child: Text('No medication adherence data for ${DateFormat.yMMMM().format(_visibleMonth)}', style: TextStyle(color: Colors.grey[700])))),
@@ -338,6 +846,228 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       const SizedBox(height: 8),
       SizedBox(height: 180, child: Padding(padding: const EdgeInsets.symmetric(horizontal:8.0), child: _SimpleSparkline(values: moodValues, labels: last7.map((d)=>DateFormat('E').format(d)).toList()))),
     ]);
+  }
+
+  /// Seed demo reminders, appointments and mood journal entries so charts show data.
+  Future<void> _seedDemoData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final u = AuthService().currentUser;
+    final now = DateTime.now();
+
+    // Seed appointments (global storage)
+    try {
+      final rawAppt = prefs.getString('aura_appointments') ?? '[]';
+      final apptList = (json.decode(rawAppt) as List<dynamic>?)?.toList() ?? [];
+      // add two appointments: one today, one later this month
+      apptList.insert(0, {
+        'title': 'Check-in with Dr. Smith',
+        'dateTime': DateTime(now.year, now.month, now.day, 10, 30).toIso8601String(),
+        'provider': 'Dr. Smith',
+        'location': 'Clinic A',
+        'notes': 'Regular follow-up',
+        'type': 'In Person'
+      });
+      apptList.insert(0, {
+        'title': 'Therapy Session',
+        'dateTime': DateTime(now.year, now.month, (now.day + 3) > 28 ? 28 : now.day + 3, 14, 0).toIso8601String(),
+        'provider': 'Therapist',
+        'location': 'Telehealth',
+        'notes': '',
+        'type': 'Video Call'
+      });
+      await prefs.setString('aura_appointments', json.encode(apptList));
+    } catch (_) {}
+
+    // Seed journal mood entries (plain storage) - create entries for entire month
+    try {
+      final rawJournal = prefs.getString('aura_journal_entries') ?? '[]';
+      final journalList = (json.decode(rawJournal) as List<dynamic>?)?.toList() ?? [];
+      // Create one mood entry per day from Oct 1 to today, values cycle 5..9
+      for (int day = 1; day <= now.day; day++) {
+        final dt = DateTime(now.year, now.month, day);
+        final val = 5 + ((day - 1) % 5); // cycles 5,6,7,8,9
+        journalList.insert(0, {
+          'id': 'seed_mood_${dt.toIso8601String()}',
+          'type': 0,
+          'dateTime': dt.toIso8601String(),
+          'title': 'Mood $val/10',
+          'body': '$val/10',
+          'tags': ['seed']
+        });
+      }
+      await prefs.setString('aura_journal_entries', json.encode(journalList));
+    } catch (_) {}
+
+    // Seed reminders (encrypted per-user). If no user, skip reminders seeding.
+    if (u != null) {
+      try {
+        final keyStr = ('${u.passphrase}aura_salt_2025').padRight(32).substring(0,32);
+        final key = encryptpkg.Key.fromUtf8(keyStr);
+        final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
+
+        final storageKey = 'aura_reminders_${u.username}';
+        final historyKey = 'aura_reminder_history_${u.username}';
+        
+        // Clear existing data
+        List<dynamic> existing = [];
+        List<dynamic> history = [];
+
+        // Create reminders for every day Oct 1-26, alternating taken/missed
+        final sample = <Map<String,dynamic>>[];
+        final historyEntries = <Map<String,dynamic>>[];
+
+        // Fixed range Oct 1-26 regardless of current date
+        for (int day = 1; day <= 26; day++) {
+          // Morning med (8am) - alternating pattern
+          final dtMorning = DateTime(now.year, now.month, day, 8, 0);
+          final idMorning = 'seed_med_${dtMorning.toIso8601String()}';
+          if (day % 2 == 0) {
+            // Even days: moved to history as taken
+            historyEntries.add({
+              'id': idMorning,
+              'medication': 'Morning Med',
+              'dosage': '10 mg',
+              'when': dtMorning.add(const Duration(minutes: 5)).toIso8601String(),
+              'status': 'taken'
+            });
+          } else {
+            // Odd days: in reminders as missed
+            sample.add({
+              'id': idMorning,
+              'medication': 'Morning Med',
+              'dosage': '10 mg',
+              'dateTime': dtMorning.toIso8601String(),
+              'enabled': true,
+              'notify': true,
+              'repeatDaily': false
+            });
+          }
+
+          // Evening med (8pm) - opposite pattern
+          final dtEvening = DateTime(now.year, now.month, day, 20, 0);
+          final idEvening = 'seed_med_evening_${dtEvening.toIso8601String()}';
+          if (day % 2 == 1) {
+            // Odd days: moved to history as taken
+            historyEntries.add({
+              'id': idEvening,
+              'medication': 'Evening Med',
+              'dosage': '5 mg',
+              'when': dtEvening.add(const Duration(minutes: 5)).toIso8601String(),
+              'status': 'taken'
+            });
+          } else {
+            // Even days: in reminders as missed
+            sample.add({
+              'id': idEvening,
+              'medication': 'Evening Med',
+              'dosage': '5 mg',
+              'dateTime': dtEvening.toIso8601String(),
+              'enabled': true,
+              'notify': true,
+              'repeatDaily': false
+            });
+          }
+        }
+
+        // Today's meds
+        sample.add({
+          'id': 'seed_med_today_morning',
+          'medication': 'Morning Med',
+          'dosage': '10 mg',
+          'dateTime': DateTime(now.year, now.month, now.day, 8, 0).toIso8601String(),
+          'enabled': true,
+          'notify': true,
+          'repeatDaily': false
+        });
+        sample.add({
+          'id': 'seed_med_today_evening',
+          'medication': 'Evening Med',
+          'dosage': '5 mg',
+          'dateTime': DateTime(now.year, now.month, now.day, 20, 0).toIso8601String(),
+          'enabled': true,
+          'notify': true,
+          'repeatDaily': false
+        });
+
+        // Save reminders (encrypted)
+        existing.insertAll(0, sample);
+        final payload = json.encode(existing);
+        final encrypted = encrypter.encrypt(payload, iv: _fixedIV).base64;
+        await prefs.setString(storageKey, encrypted);
+
+        // Save history (encrypted)
+        history.insertAll(0, historyEntries);
+        final historyPayload = json.encode(history);
+        final encryptedHistory = encrypter.encrypt(historyPayload, iv: _fixedIV).base64;
+        await prefs.setString(historyKey, encryptedHistory);
+      } catch (_) {}
+    }
+
+    // reload data and refresh UI (best-effort). Also inject visible demo state so charts update immediately.
+    await _loadDataForMonth(_visibleMonth);
+
+    // Inject demo state to ensure charts show even if loaders miss encrypted reminders when not signed in.
+    try {
+      final today = DateTime.now();
+      // clear existing caches for visible month
+      _dayStatus.clear();
+      _dayDetails.clear();
+
+      // seed day details from demo reminders we added above
+      final demoTodayKey = DateFormat('yyyy-MM-dd').format(DateTime(today.year, today.month, today.day));
+      final demoYesterdayKey = DateFormat('yyyy-MM-dd').format(DateTime(today.year, today.month, today.day - 1));
+
+      // today: one scheduled (pending)
+      _dayDetails[demoTodayKey] = [
+        {'medication': 'Med A', 'dosage': '10 mg', 'dateTime': DateTime(today.year, today.month, today.day, 9, 0).toIso8601String(), 'takenAt': null}
+      ];
+      _dayStatus[demoTodayKey] = DayStatus.nodata; // will be pending or nodata depending on time
+
+      // yesterday: one taken
+      _dayDetails[demoYesterdayKey] = [
+        {'medication': 'Med B', 'dosage': '5 mg', 'dateTime': DateTime(today.year, today.month, today.day - 1, 20, 0).toIso8601String(), 'takenAt': DateTime(today.year, today.month, today.day - 1, 20, 5).toIso8601String()}
+      ];
+      _dayStatus[demoYesterdayKey] = DayStatus.taken;
+
+  // compute a simple month adherence: mark demo days
+  int totalForMonth = 0;
+  int takenForMonth = 0;
+      final daysInMonth = DateTime(_visibleMonth.year, _visibleMonth.month + 1, 0).day;
+      for (int d = 1; d <= daysInMonth; d++) {
+        final k = DateFormat('yyyy-MM-dd').format(DateTime(_visibleMonth.year, _visibleMonth.month, d));
+        final s = _dayStatus[k];
+        if (s != null && s != DayStatus.nodata) {
+          totalForMonth++;
+          if (s == DayStatus.taken) takenForMonth++;
+        }
+      }
+      _monthAdherencePercent = totalForMonth == 0 ? 0.0 : (takenForMonth / totalForMonth) * 100.0;
+
+      // weekly buckets (simple 4-week slice as UI expects)
+      _weeklyAdherencePct.clear();
+      for (int w = 0; w < 4; w++) {
+        int wkTotal = 0; int wkTaken = 0;
+        final start = w * 7 + 1;
+        for (int d = start; d <= (start + 6) && d <= daysInMonth; d++) {
+          final key = DateFormat('yyyy-MM-dd').format(DateTime(_visibleMonth.year, _visibleMonth.month, d));
+          final s = _dayStatus[key];
+          if (s != null && s != DayStatus.nodata) { wkTotal++; if (s == DayStatus.taken) wkTaken++; }
+        }
+        _weeklyAdherencePct[w+1] = wkTotal == 0 ? 0.0 : (wkTaken / wkTotal) * 100.0;
+      }
+
+      // seed mood values for last 7 days (4..10)
+      _moodByDate.clear();
+      for (int i = 0; i < 7; i++) {
+        final dt = DateTime(today.year, today.month, today.day).subtract(Duration(days: 6 - i));
+        final key = DateFormat('yyyy-MM-dd').format(dt);
+        _moodByDate[key] = (4 + i).toDouble();
+      }
+
+      setState(() {});
+    } catch (_) {}
+
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Demo data seeded — check Trends and Reminders')));
   }
 
     @override

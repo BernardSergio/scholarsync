@@ -7,38 +7,14 @@ import 'package:encrypt/encrypt.dart' as encryptpkg;
 import 'auth_service.dart';
 import 'appointments.dart';
 
+// Fixed IV for consistent encryption/decryption across the app
+final _fixedIV = encryptpkg.IV.fromUtf8('aura_fixed_iv_2025'.padRight(16).substring(0, 16));
+
 // Notifier that indicates reminders storage changed. Pages can listen and reload.
 final ValueNotifier<int> remindersNotifier = ValueNotifier<int>(0);
 
-// Shared helper: persist a single reminder map into the user's encrypted reminders list.
-Future<void> saveReminderMap(Map<String, dynamic> m) async {
-  final u = AuthService().currentUser;
-  if (u == null) return;
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final keyStr = ('${u.passphrase}aura_salt_2025').padRight(32).substring(0,32);
-    final key = encryptpkg.Key.fromUtf8(keyStr);
-    final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
-    final iv = encryptpkg.IV.fromLength(16);
-    final raw = prefs.getString('aura_reminders_${u.username}');
-    List<dynamic> list = [];
-    if (raw != null && raw.isNotEmpty) {
-      try {
-        final dec = encrypter.decrypt64(raw, iv: iv);
-        list = json.decode(dec) as List<dynamic>;
-      } catch (_) {
-        try { list = json.decode(raw) as List<dynamic>; } catch (_) { list = []; }
-      }
-    }
-    list.insert(0, m);
-    final payload = json.encode(list);
-    final encrypted = encrypter.encrypt(payload, iv: iv).base64;
-    await prefs.setString('aura_reminders_${u.username}', encrypted);
-  // Debug: print what we saved so we can verify Home can load it.
-  try { debugPrint('saveReminderMap: saved reminder for ${u.username}: ${m['medication']} @ ${m['dateTime']}'); } catch (_) {}
-    try { remindersNotifier.value = remindersNotifier.value + 1; } catch (_) {}
-  } catch (_) {}
-}
+// The top-level saveReminderMap function has been removed in favor of the more robust
+// _saveForCurrentUser method in _RemindersPageState which provides better deduplication.
 
 enum ReminderStatus { pending, taken, missed }
 
@@ -136,9 +112,8 @@ class _RemindersPageState extends State<RemindersPage> {
         final key = await _keyForCurrentUser();
         if (key != null) {
           final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
-          final iv = encryptpkg.IV.fromLength(16);
-          final decrypted = encrypter.decrypt64(enc, iv: iv);
-          final list = json.decode(decrypted) as List<dynamic>;
+          final dec = encrypter.decrypt64(enc, iv: _fixedIV);
+          final list = json.decode(dec) as List<dynamic>;
           final tmp = list.map((e) => Reminder.fromJson(e as Map<String, dynamic>)).toList();
           // Dedupe by id keeping the last occurrence (newest) to ensure a single
           // canonical reminder per id (handles duplicates inserted from other flows)
@@ -195,20 +170,49 @@ class _RemindersPageState extends State<RemindersPage> {
     final key = await _keyForCurrentUser();
     if (key == null) return;
     final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
-    final iv = encryptpkg.IV.fromLength(16);
-    // Deduplicate reminders by id before saving. Keep the last occurrence
-    // (most recent) so that updates to duplicates are preserved.
-    final seen = <String>{};
-    final dedupedReversed = <Map<String, dynamic>>[];
-    for (final r in _reminders.reversed) {
-      if (!seen.contains(r.id)) {
-        dedupedReversed.add(r.toJson());
-        seen.add(r.id);
+    
+    // Get existing reminders
+    List<dynamic> existingReminders = [];
+    final raw = prefs.getString(_storageKeyFor(u.username));
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final dec = encrypter.decrypt64(raw, iv: _fixedIV);
+        existingReminders = json.decode(dec) as List<dynamic>;
+      } catch (_) {
+        try { 
+          existingReminders = json.decode(raw) as List<dynamic>;
+        } catch (_) {}
       }
     }
-    final deduped = dedupedReversed.reversed.toList();
-    final payload = json.encode(deduped);
-    final encrypted = encrypter.encrypt(payload, iv: iv).base64;
+
+    // Convert all to Map for easy comparison
+    List<Map<String, dynamic>> allReminders = [];
+    // Add existing ones first
+    for (final rem in existingReminders) {
+      try {
+        final Map<String, dynamic> m = Map<String, dynamic>.from(rem as Map);
+        allReminders.add(m);
+      } catch (_) {}
+    }
+    
+    // Add new ones, checking for duplicates
+    for (final r in _reminders) {
+      final newRem = r.toJson();
+      bool isDuplicate = false;
+      for (final existing in allReminders) {
+        if (existing['medication'] == newRem['medication'] && 
+            existing['dateTime'] == newRem['dateTime']) {
+          isDuplicate = true;
+          break;
+        }
+      }
+      if (!isDuplicate) {
+        allReminders.add(newRem);
+      }
+    }
+
+    final payload = json.encode(allReminders);
+    final encrypted = encrypter.encrypt(payload, iv: _fixedIV).base64;
     await prefs.setString(_storageKeyFor(u.username), encrypted);
     await prefs.setString(_historyKeyFor(u.username), json.encode(_history));
   }
@@ -300,14 +304,15 @@ class _RemindersPageState extends State<RemindersPage> {
         }
         final id = existing?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
         final r = Reminder(id: id, medication: med, dosage: dose, dateTime: finalDt, enabled: true, notify: notify, repeatDaily: repeat, takenAt: existing?.takenAt);
+        // Always use _saveForCurrentUser for consistent deduplication
         if (existing != null && index != null) {
           _reminders[index] = r;
         } else {
           _reminders.insert(0, r);
         }
-  await _saveForCurrentUser();
+        await _saveForCurrentUser();
         try { remindersNotifier.value = remindersNotifier.value + 1; } catch (_) {}
-         Navigator.pop(c, true);
+        Navigator.pop(c, true);
       }, child: const Text('Save'))],
     )));
 
@@ -316,6 +321,8 @@ class _RemindersPageState extends State<RemindersPage> {
 
 // Public helper to show Add Reminder dialog from other pages (e.g. Home quick action)
 Future<bool?> showAddReminderDialog(BuildContext context) async {
+  // Use _RemindersPageState for all reminder operations
+  final state = _RemindersPageState();
   final u = AuthService().currentUser;
   if (u == null) return null;
 
@@ -376,7 +383,10 @@ Future<bool?> showAddReminderDialog(BuildContext context) async {
     actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')), TextButton(onPressed: () async {
       final med = medCtrl.text.trim();
       final dose = doseCtrl.text.trim();
-      if (med.isEmpty || dose.isEmpty) return; // validation: non-empty
+      if (med.isEmpty || dose.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter medication name and dosage')));
+        return;
+      }
       // Build a DateTime from selectedDate and selectedTime. If either is missing, default to now+15min.
       DateTime finalDt;
       if (selectedDate != null && selectedTime != null) {
@@ -385,10 +395,68 @@ Future<bool?> showAddReminderDialog(BuildContext context) async {
         finalDt = DateTime.now().add(const Duration(minutes: 15));
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No date/time chosen — defaulting reminder to 15 minutes from now')));
       }
-      if (finalDt.isBefore(DateTime.now())) return; // validation: not in past
-      final id = DateTime.now().millisecondsSinceEpoch.toString();
-      final r = Reminder(id: id, medication: med, dosage: dose, dateTime: finalDt, enabled: true, notify: notify, repeatDaily: repeat);
-      try { await saveReminderMap(r.toJson()); } catch (_) {}
+      if (finalDt.isBefore(DateTime.now())) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a future time')));
+        return;
+      }
+      
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString('aura_reminders_${u.username}');
+        List<dynamic> reminders = [];
+        
+        // Get existing reminders
+        if (raw != null && raw.isNotEmpty) {
+          final keyStr = ('${u.passphrase}aura_salt_2025').padRight(32).substring(0,32);
+          final key = encryptpkg.Key.fromUtf8(keyStr);
+          final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
+          
+          try {
+            final dec = encrypter.decrypt64(raw, iv: _fixedIV);
+            reminders = json.decode(dec) as List<dynamic>;
+          } catch (_) {
+            try {
+              reminders = json.decode(raw) as List<dynamic>;
+            } catch (_) {}
+          }
+        }
+        
+        // Check for duplicates
+        final newReminder = {
+          'id': DateTime.now().millisecondsSinceEpoch.toString(),
+          'medication': med,
+          'dosage': dose,
+          'dateTime': finalDt.toIso8601String(),
+          'enabled': true,
+          'notify': notify,
+          'repeatDaily': repeat,
+          'takenAt': null
+        };
+        
+        bool isDuplicate = reminders.any((r) {
+          try {
+            final existing = r as Map<String, dynamic>;
+            return existing['medication'] == med && 
+                   DateTime.parse(existing['dateTime'] as String).isAtSameMomentAs(finalDt);
+          } catch (_) {
+            return false;
+          }
+        });
+        
+        if (!isDuplicate) {
+          reminders.insert(0, newReminder);
+          final keyStr = ('${u.passphrase}aura_salt_2025').padRight(32).substring(0,32);
+          final key = encryptpkg.Key.fromUtf8(keyStr);
+          final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
+          final payload = json.encode(reminders);
+          final encrypted = encrypter.encrypt(payload, iv: _fixedIV).base64;
+          await prefs.setString('aura_reminders_${u.username}', encrypted);
+          remindersNotifier.value = remindersNotifier.value + 1;
+        }
+      } catch (_) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to save reminder')));
+        return;
+      }
       Navigator.pop(c, true);
     }, child: const Text('Save'))],
   ));
@@ -465,6 +533,42 @@ Future<bool?> showAddReminderDialog(BuildContext context) async {
           if (dt.year == now.year && dt.month == now.month && dt.day == now.day) out.add(a);
         } catch (_) {}
       }
+    } catch (_) {}
+    return out;
+  }
+
+  /// Load a combined list of today's scheduled items (medications + appointments).
+  /// Each entry is a map with at least: { 'type': 'med'|'appt', 'time': DateTime, ... }
+  Future<List<Map<String, dynamic>>> _loadTodaysSchedule() async {
+    final out = <Map<String, dynamic>>[];
+    try {
+      final meds = await loadTodaysReminderMaps();
+      for (final m in meds) {
+        try {
+          final rem = Reminder.fromJson(m);
+          out.add({
+            'type': 'med',
+            'id': rem.id,
+            'medication': rem.medication,
+            'dosage': rem.dosage,
+            'time': rem.dateTime,
+            'reminder': rem,
+          });
+        } catch (_) {}
+      }
+      final appts = await _loadTodaysAppointments();
+      for (final a in appts) {
+        out.add({
+          'type': 'appt',
+          'id': '${a.title}_${a.dateTime.toIso8601String()}',
+          'title': a.title,
+          'provider': a.provider,
+          'time': a.dateTime,
+          'appointment': a,
+        });
+      }
+      // sort by time ascending
+      out.sort((a, b) => (a['time'] as DateTime).compareTo(b['time'] as DateTime));
     } catch (_) {}
     return out;
   }
@@ -735,9 +839,8 @@ Future<List<Map<String, dynamic>>> loadTodaysReminderMaps() async {
     final keyStr = ('${u.passphrase}aura_salt_2025').padRight(32).substring(0,32);
     final key = encryptpkg.Key.fromUtf8(keyStr);
     final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
-    final iv = encryptpkg.IV.fromLength(16);
     try {
-      final dec = encrypter.decrypt64(raw, iv: iv);
+      final dec = encrypter.decrypt64(raw, iv: _fixedIV);
       final list = json.decode(dec) as List<dynamic>;
       final now = DateTime.now();
       for (final e in list) {

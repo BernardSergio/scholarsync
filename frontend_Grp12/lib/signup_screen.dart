@@ -95,7 +95,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     const SizedBox(height: 20),
 
                     // Username
-                    TextField(controller: _usernameCtrl, decoration: _inputDecoration('Username')),
+                    TextField(controller: _usernameCtrl, decoration: _inputDecoration('E-mail Address')),
                     const SizedBox(height: 16),
 
                     // Passphrase
