@@ -1436,7 +1436,7 @@ Future<bool> logMoodToBackend({
     );
 
     if (response.statusCode == 201) {
-      print("✅ Mood logged successfully to database: ${response.body}");
+      print("Mood logged successfully. ${response.body}");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1504,11 +1504,11 @@ Future<bool> logMedicationToBackend({
     );
 
     if (response.statusCode == 201) {
-      print("✅ Medication logged successfully to database: ${response.body}");
+      print("Medication logged successfully ${response.body}");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Medication saved to database!'),
+            content: Text('Medication saved '),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 2),
           ),
@@ -1574,7 +1574,7 @@ Future<bool> saveNoteToBackend({
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Note saved to database!'),
+            content: Text('Note saved.'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 2),
           ),
@@ -1600,6 +1600,8 @@ Future<bool> saveNoteToBackend({
     return false;
   }
 }
+
+
 Future<bool> saveAppointmentToBackend({
   required String title,
   required String provider,
@@ -1623,6 +1625,21 @@ Future<bool> saveAppointmentToBackend({
     final token = user['token'] as String;
     final url = Uri.parse('http://localhost:5000/api/appointments');
 
+    // 🔥 FIX: Convert Flutter type to backend format
+    String backendType = type;
+    if (type == 'In Person') {
+      backendType = 'In-Person';
+    }
+    // Video Call and Phone Call already match
+
+    print("Saving appointment...");
+    print("  Title: $title");
+    print("  Provider: $provider");
+    print("  Type: $backendType");
+    print("  DateTime: ${dateTime.toIso8601String()}");
+    print("  Location: ${location ?? ''}");
+    print("  Notes: ${notes ?? ''}");
+
     final response = await http.post(
       url,
       headers: {
@@ -1632,19 +1649,22 @@ Future<bool> saveAppointmentToBackend({
       body: jsonEncode({
         'title': title,
         'provider': provider,
-        'type': type,
+        'type': backendType,  // 🔥 Use converted type
         'dateTime': dateTime.toIso8601String(),
         'location': location ?? '',
         'notes': notes ?? '',
       }),
     );
 
+    print("📥 Backend response: ${response.statusCode}");
+    print("📥 Response body: ${response.body}");
+
     if (response.statusCode == 201) {
-      print("✅ Appointment saved successfully to database: ${response.body}");
+      print("Appointment saved successfully.");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Appointment saved to database!'),
+            content: Text('Appointment saved.'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 2),
           ),
@@ -1652,7 +1672,8 @@ Future<bool> saveAppointmentToBackend({
       }
       return true;
     } else {
-      print("❌ Failed to save appointment: ${response.statusCode} ${response.body}");
+      print("❌ Failed to save appointment: ${response.statusCode}");
+      print("❌ Error: ${response.body}");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to save: ${response.statusCode}')),
@@ -1670,4 +1691,5 @@ Future<bool> saveAppointmentToBackend({
     return false;
   }
 }
+
 }

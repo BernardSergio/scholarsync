@@ -6,7 +6,8 @@ import authRoutes from "./Routes/authRoutes.js";
 import moodRoutes from "./Routes/moodRoutes.js";
 import medicationRoutes from "./Routes/medicationRoutes.js";
 import noteRoutes from "./Routes/noteRoutes.js"; 
-import appointmentRoutes from "./Routes/appointmentRoutes.js"; 
+import appointmentRoutes from "./Routes/appointmentRoutes.js";
+import reminderRoutes from "./Routes/reminderRoutes.js"; // ✅ Added
 import { verifyToken } from "./Middleware/authMiddleware.js";
 
 dotenv.config();
@@ -37,6 +38,12 @@ app.use("/api/medications", medicationRoutes);
 
 // ✅ Note routes
 app.use("/api/notes", noteRoutes); 
+
+// ✅ Appointment routes 
+app.use("/api/appointments", appointmentRoutes);
+
+// ✅ Reminder routes
+app.use("/api/reminders", reminderRoutes);
 
 // ✅ Protected test route
 app.get("/api/protected", verifyToken, (req, res) => {

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'auth_service.dart';
 import 'dart:math' as math;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -51,7 +53,6 @@ final ValueNotifier<int> appointmentsNotifier = ValueNotifier<int>(0);
 // Public helper that shows the same scheduling dialog used in AppointmentsPage
 // and persists the new appointment into SharedPreferences so other pages (Home)
 // can reload and display it immediately.
-// Replace the existing showScheduleAppointmentDialog function in appointments.dart with this:
 
 Future<bool?> showScheduleAppointmentDialog(BuildContext context, {Appointment? existing, int? index}) async {
   final titleCtrl = TextEditingController(text: existing?.title ?? '');
@@ -214,9 +215,42 @@ Future<bool?> showScheduleAppointmentDialog(BuildContext context, {Appointment? 
                           ),
                         );
                         
-                        // CALL THE BACKEND SAVE FUNCTION from home_screen.dart
-                        // We need to import it at the top of appointments.dart
-                        // For now, we'll save locally AND notify the home screen
+                        // 🔥 SAVE TO BACKEND
+                        bool backendSuccess = false;
+                        try {
+                          final user = await AuthService().getCurrentUser();
+                          if (user != null && user['token'] != null) {
+                            final token = user['token'] as String;
+                            final url = Uri.parse('http://localhost:5000/api/appointments');
+                            
+                            // Convert type to backend format
+                            String backendType = apptType;
+                            if (apptType == 'In Person') {
+                              backendType = 'In-Person';
+                            }
+                            
+                            final response = await http.post(
+                              url,
+                              headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': 'Bearer $token',
+                              },
+                              body: jsonEncode({
+                                'title': apptTitle,
+                                'provider': provider,
+                                'type': backendType,
+                                'dateTime': dt.toIso8601String(),
+                                'location': location,
+                                'notes': notes,
+                              }),
+                            );
+                            
+                            backendSuccess = response.statusCode == 201;
+                            print(backendSuccess ? "✅ Saved to backend" : "❌ Backend save failed: ${response.statusCode}");
+                          }
+                        } catch (e) {
+                          print("❌ Backend error: $e");
+                        }
                         
                         // Save to SharedPreferences (local backup)
                         try {
@@ -243,10 +277,12 @@ Future<bool?> showScheduleAppointmentDialog(BuildContext context, {Appointment? 
                           
                           // Show success
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Appointment scheduled successfully!'),
-                              backgroundColor: Colors.green,
-                              duration: Duration(seconds: 2),
+                            SnackBar(
+                              content: Text(backendSuccess 
+                                ? 'Appointment saved to database!' 
+                                : 'Appointment saved locally (backend unavailable)'),
+                              backgroundColor: backendSuccess ? Colors.green : Colors.orange,
+                              duration: const Duration(seconds: 2),
                             ),
                           );
                         } catch (e) {
@@ -318,185 +354,289 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     await prefs.setString(_storageKey, data);
   }
 
-  void _showScheduleDialog({Appointment? existing, int? index}) async {
-    final titleCtrl = TextEditingController(text: existing?.title ?? '');
+// Replace the _showScheduleDialog method in the _AppointmentsPageState class in appointments.dart
+
+void _showScheduleDialog({Appointment? existing, int? index}) async {
+  final titleCtrl = TextEditingController(text: existing?.title ?? '');
   DateTime? selectedDate = existing?.dateTime ?? DateTime.now();
   TimeOfDay? selectedTime = existing != null ? TimeOfDay.fromDateTime(existing.dateTime) : TimeOfDay.now();
   String provider = existing?.provider ?? '';
   String location = existing?.location ?? '';
   String notes = existing?.notes ?? '';
-  // track appointment type locally (UI only for now)
   String apptType = existing?.type ?? 'In Person';
 
-    final result = await showDialog<bool?>(
-      context: context,
-      builder: (c) => Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(existing == null ? 'Schedule New Appointment' : 'Edit Appointment', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 12),
-                StatefulBuilder(
-                  builder: (dialogContext, setDialogState) {
-                    return SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Appointment Title', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextButton(
-                                  onPressed: () async {
-                                    final d = await showDatePicker(context: context, initialDate: selectedDate ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2100));
-                                    if (d != null) setState(() => selectedDate = d);
-                                  },
-                                  style: TextButton.styleFrom(backgroundColor: const Color(0xFFF3F6F8), foregroundColor: Colors.black87, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                                  child: Align(alignment: Alignment.centerLeft, child: Text(selectedDate == null ? 'Select date' : _dateFmt.format(selectedDate!))),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: TextButton(
-                                  onPressed: () async {
-                                    final t = await showTimePicker(context: context, initialTime: selectedTime ?? TimeOfDay.now());
-                                    if (t != null) setState(() => selectedTime = t);
-                                  },
-                                  style: TextButton.styleFrom(backgroundColor: const Color(0xFFF3F6F8), foregroundColor: Colors.black87, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                                  child: Align(alignment: Alignment.centerLeft, child: Text(selectedTime == null ? 'Select time' : selectedTime!.format(context))),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          // Label for the custom field to match other inputs
-                          const Text('Appointment Type', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                          const SizedBox(height: 6),
-                          // Custom InkWell + showMenu so we can position the popup left-aligned and match dialog width
-                          Builder(builder: (fieldContext) {
-                            final fieldKey = GlobalKey();
-                            return SizedBox(
-                              key: fieldKey,
-                              width: double.infinity,
-                              child: InkWell(
-                                onTap: () async {
-                                  final renderBox = fieldKey.currentContext?.findRenderObject() as RenderBox?;
-                                  final overlay = Overlay.of(fieldContext).context.findRenderObject() as RenderBox;
-                                  final screenW = MediaQuery.of(fieldContext).size.width;
-                                  final dialogMax = 520.0;
-                                  final dialogEffective = math.min(screenW - 48.0, dialogMax);
-                                  final extra = 48.0; // extend rows further to the right
-                                  final w = math.min(dialogEffective, dialogEffective - 40.0 + extra);
-
-                                  // compute left/top for menu so it lines up with the field (left aligned)
-                                  RelativeRect position = const RelativeRect.fromLTRB(0, 0, 0, 0);
-                                  if (renderBox != null) {
-                                    final offset = renderBox.localToGlobal(Offset.zero, ancestor: overlay);
-                                    position = RelativeRect.fromLTRB(offset.dx, offset.dy + renderBox.size.height, offset.dx + w, offset.dy);
-                                  }
-
-                                  final selected = await showMenu<String>(
-                                    context: fieldContext,
-                                    position: position,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    color: Colors.white,
-                                    items: [
-                                                  PopupMenuItem(value: 'In Person', child: SizedBox(width: w, child: Row(children: [const Icon(Icons.location_on, size: 18), const SizedBox(width: 8), const Expanded(child: Text('In-Person')), if (apptType == 'In Person') const Icon(Icons.check, color: Color(0xFF00796B))]))),
-                                                  PopupMenuItem(value: 'Video Call', child: SizedBox(width: w, child: Row(children: [const Icon(Icons.videocam, size: 18), const SizedBox(width: 8), const Expanded(child: Text('Video Call')), if (apptType == 'Video Call') const Icon(Icons.check, color: Color(0xFF00796B))]))),
-                                                  PopupMenuItem(value: 'Phone Call', child: SizedBox(width: w, child: Row(children: [const Icon(Icons.phone, size: 18), const SizedBox(width: 8), const Expanded(child: Text('Phone Call')), if (apptType == 'Phone Call') const Icon(Icons.check, color: Color(0xFF00796B))]))),
-                                    ],
-                                  );
-
-                                  if (selected != null) setDialogState(() => apptType = selected);
+  final result = await showDialog<bool?>(
+    context: context,
+    builder: (c) => Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(existing == null ? 'Schedule New Appointment' : 'Edit Appointment', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 12),
+              StatefulBuilder(
+                builder: (dialogContext, setDialogState) {
+                  return SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Appointment Title', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextButton(
+                                onPressed: () async {
+                                  final d = await showDatePicker(context: context, initialDate: selectedDate ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2100));
+                                  if (d != null) setDialogState(() => selectedDate = d);
                                 },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF3F6F8),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: Colors.grey.shade300),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Row(children: [
-                                        if (apptType == 'In Person') const Icon(Icons.location_on, size: 18) else if (apptType == 'Video Call') const Icon(Icons.videocam, size: 18) else const Icon(Icons.phone, size: 18),
-                                        const SizedBox(width: 8),
-                                        Text(apptType == 'In Person' ? 'In-Person' : apptType),
-                                      ]),
-                                      const Icon(Icons.arrow_drop_down, color: Colors.grey),
-                                    ],
-                                  ),
+                                style: TextButton.styleFrom(backgroundColor: const Color(0xFFF3F6F8), foregroundColor: Colors.black87, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                                child: Align(alignment: Alignment.centerLeft, child: Text(selectedDate == null ? 'Select date' : _dateFmt.format(selectedDate!))),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextButton(
+                                onPressed: () async {
+                                  final t = await showTimePicker(context: context, initialTime: selectedTime ?? TimeOfDay.now());
+                                  if (t != null) setDialogState(() => selectedTime = t);
+                                },
+                                style: TextButton.styleFrom(backgroundColor: const Color(0xFFF3F6F8), foregroundColor: Colors.black87, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                                child: Align(alignment: Alignment.centerLeft, child: Text(selectedTime == null ? 'Select time' : selectedTime!.format(context))),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        const Text('Appointment Type', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                        const SizedBox(height: 6),
+                        Builder(builder: (fieldContext) {
+                          final fieldKey = GlobalKey();
+                          return SizedBox(
+                            key: fieldKey,
+                            width: double.infinity,
+                            child: InkWell(
+                              onTap: () async {
+                                final renderBox = fieldKey.currentContext?.findRenderObject() as RenderBox?;
+                                final overlay = Overlay.of(fieldContext).context.findRenderObject() as RenderBox;
+                                final screenW = MediaQuery.of(fieldContext).size.width;
+                                final dialogMax = 520.0;
+                                final dialogEffective = math.min(screenW - 48.0, dialogMax);
+                                final extra = 48.0;
+                                final w = math.min(dialogEffective, dialogEffective - 40.0 + extra);
+
+                                RelativeRect position = const RelativeRect.fromLTRB(0, 0, 0, 0);
+                                if (renderBox != null) {
+                                  final offset = renderBox.localToGlobal(Offset.zero, ancestor: overlay);
+                                  position = RelativeRect.fromLTRB(offset.dx, offset.dy + renderBox.size.height, offset.dx + w, offset.dy);
+                                }
+
+                                final selected = await showMenu<String>(
+                                  context: fieldContext,
+                                  position: position,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  color: Colors.white,
+                                  items: [
+                                    PopupMenuItem(value: 'In Person', child: SizedBox(width: w, child: Row(children: [const Icon(Icons.location_on, size: 18), const SizedBox(width: 8), const Expanded(child: Text('In-Person')), if (apptType == 'In Person') const Icon(Icons.check, color: Color(0xFF00796B))]))),
+                                    PopupMenuItem(value: 'Video Call', child: SizedBox(width: w, child: Row(children: [const Icon(Icons.videocam, size: 18), const SizedBox(width: 8), const Expanded(child: Text('Video Call')), if (apptType == 'Video Call') const Icon(Icons.check, color: Color(0xFF00796B))]))),
+                                    PopupMenuItem(value: 'Phone Call', child: SizedBox(width: w, child: Row(children: [const Icon(Icons.phone, size: 18), const SizedBox(width: 8), const Expanded(child: Text('Phone Call')), if (apptType == 'Phone Call') const Icon(Icons.check, color: Color(0xFF00796B))]))),
+                                  ],
+                                );
+
+                                if (selected != null) setDialogState(() => apptType = selected);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF3F6F8),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.grey.shade300),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(children: [
+                                      if (apptType == 'In Person') const Icon(Icons.location_on, size: 18) 
+                                      else if (apptType == 'Video Call') const Icon(Icons.videocam, size: 18) 
+                                      else const Icon(Icons.phone, size: 18),
+                                      const SizedBox(width: 8),
+                                      Text(apptType == 'In Person' ? 'In-Person' : apptType),
+                                    ]),
+                                    const Icon(Icons.arrow_drop_down, color: Colors.grey),
+                                  ],
                                 ),
                               ),
+                            ),
+                          );
+                        }),
+                        const SizedBox(height: 12),
+                        TextField(controller: TextEditingController(text: provider), onChanged: (v) => provider = v, decoration: const InputDecoration(labelText: 'Healthcare Provider', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
+                        const SizedBox(height: 12),
+                        TextField(controller: TextEditingController(text: location), onChanged: (v) => location = v, decoration: const InputDecoration(labelText: 'Location', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
+                        const SizedBox(height: 12),
+                        TextField(controller: TextEditingController(text: notes), onChanged: (v) => notes = v, decoration: const InputDecoration(labelText: 'Notes (optional)', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
+                        const SizedBox(height: 12),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(c, false),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFF00796B)),
+                      foregroundColor: const Color(0xFF00796B),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    onPressed: () async {
+                      if (selectedDate != null && selectedTime != null) {
+                        final dt = DateTime(selectedDate!.year, selectedDate!.month, selectedDate!.day, selectedTime!.hour, selectedTime!.minute);
+                        final apptTitle = titleCtrl.text.trim().isEmpty ? 'Appointment' : titleCtrl.text.trim();
+                        
+                        // Close dialog first
+                        Navigator.pop(c, null);
+                        
+                        // Show loading
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (loadingCtx) => const Center(
+                            child: Card(
+                              child: Padding(
+                                padding: EdgeInsets.all(24.0),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    CircularProgressIndicator(),
+                                    SizedBox(height: 16),
+                                    Text('Saving appointment...'),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                        
+                        // 🔥 SAVE TO BACKEND FIRST
+                        bool backendSuccess = false;
+                        try {
+                          final user = await AuthService().getCurrentUser();
+                          if (user != null && user['token'] != null) {
+                            final token = user['token'] as String;
+                            final url = Uri.parse('http://localhost:5000/api/appointments');
+                            
+                            // Convert type to backend format
+                            String backendType = apptType;
+                            if (apptType == 'In Person') {
+                              backendType = 'In-Person';
+                            }
+                            
+                            print("📤 Appointments Page - Sending to backend:");
+                            print("  Title: $apptTitle");
+                            print("  Type: $backendType");
+                            print("  DateTime: ${dt.toIso8601String()}");
+                            
+                            final response = await http.post(
+                              url,
+                              headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': 'Bearer $token',
+                              },
+                              body: jsonEncode({
+                                'title': apptTitle,
+                                'provider': provider,
+                                'type': backendType,
+                                'dateTime': dt.toIso8601String(),
+                                'location': location,
+                                'notes': notes,
+                              }),
                             );
-                          }),
-                          const SizedBox(height: 12),
-                          TextField(controller: TextEditingController(text: provider), onChanged: (v) => provider = v, decoration: const InputDecoration(labelText: 'Healthcare Provider', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
-                          const SizedBox(height: 12),
-                          TextField(controller: TextEditingController(text: location), onChanged: (v) => location = v, decoration: const InputDecoration(labelText: 'Location', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
-                          const SizedBox(height: 12),
-                          TextField(controller: TextEditingController(text: notes), onChanged: (v) => notes = v, decoration: const InputDecoration(labelText: 'Notes (optional)', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
-                          const SizedBox(height: 12),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 6),
-                // single action row (styled)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    OutlinedButton(
-                      onPressed: () => Navigator.pop(c, false),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFF00796B)),
-                        foregroundColor: const Color(0xFF00796B),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      child: const Text('Cancel'),
-                    ),
-                    const SizedBox(width: 12),
-              ElevatedButton(
-            onPressed: () async {
-                        if (selectedDate != null && selectedTime != null) {
-                          final dt = DateTime(selectedDate!.year, selectedDate!.month, selectedDate!.day, selectedTime!.hour, selectedTime!.minute);
-                          final appt = Appointment(title: titleCtrl.text.trim().isEmpty ? 'Appointment' : titleCtrl.text.trim(), dateTime: dt, provider: provider, location: location, notes: notes, type: apptType);
-                          if (existing != null && index != null) {
-                            setState(() => _appointments[index] = appt);
-                          } else {
-                            setState(() => _appointments.insert(0, appt));
+                            
+                            backendSuccess = response.statusCode == 201;
+                            print(backendSuccess 
+                              ? "Appointments Page - Saved to backend!" 
+                              : "Appointments Page - Backend failed: ${response.statusCode} ${response.body}");
                           }
-                          await _saveAppointments();
-                          try { appointmentsNotifier.value = appointmentsNotifier.value + 1; } catch (_) {}
-                          Navigator.pop(c, true);
+                        } catch (e) {
+                          print("Appointments Page - Backend error: $e");
                         }
-                      },
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00796B), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                      child: Text(existing == null ? 'Schedule Appointment' : 'Update Appointment', style: const TextStyle(color: Colors.white)),
+                        
+                        // Save to local storage
+                        final appt = Appointment(
+                          title: apptTitle, 
+                          dateTime: dt, 
+                          provider: provider, 
+                          location: location, 
+                          notes: notes, 
+                          type: apptType
+                        );
+                        
+                        if (existing != null && index != null) {
+                          setState(() => _appointments[index] = appt);
+                        } else {
+                          setState(() => _appointments.insert(0, appt));
+                        }
+                        
+                        await _saveAppointments();
+                        
+                        try { 
+                          appointmentsNotifier.value = appointmentsNotifier.value + 1; 
+                        } catch (_) {}
+                        
+                        // Close loading
+                        Navigator.pop(context);
+                        
+                        // Show success message
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(backendSuccess 
+                                ? 'Appointment saved to database!' 
+                                : 'Appointment saved locally (backend unavailable)'),
+                              backgroundColor: backendSuccess ? Colors.green : Colors.orange,
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00796B), 
+                      foregroundColor: Colors.white, 
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
                     ),
-                  ],
-                ),
-              ],
-            ),
+                    child: Text(
+                      existing == null ? 'Schedule Appointment' : 'Update Appointment', 
+                      style: const TextStyle(color: Colors.white)
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
-    );
+    ),
+  );
 
-    if (result == true) {
-      // optional: show confirmation
-    }
+  if (result == true) {
+    // optional: show confirmation
   }
+}
 
   void _confirmDelete(int index) async {
     final ok = await showDialog<bool?>(context: context, builder: (c) => AlertDialog(
