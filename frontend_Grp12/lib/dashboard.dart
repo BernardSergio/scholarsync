@@ -90,10 +90,26 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     } catch (_) {}
   }
 
+  // Navigate months in the calendar
+  void _prevMonth() {
+    setState(() {
+      _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month - 1);
+      _loadDataForMonth(_visibleMonth);
+    });
+  }
+
+  void _nextMonth() {
+    setState(() {
+      _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month + 1);
+      _loadDataForMonth(_visibleMonth);
+    });
+  }
+
   Future<encryptpkg.Key?> _keyForUser() async {
     final u = AuthService().currentUser;
     if (u == null) return null;
-    final k = ('${u.passphrase}aura_salt_2025').padRight(32).substring(0,32);
+    final pass = u['passphrase'] ?? '';
+    final k = ('${pass}aura_salt_2025').padRight(32).substring(0,32);
     return encryptpkg.Key.fromUtf8(k);
   }
 
@@ -220,7 +236,8 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
           Future<List<dynamic>> decode(String? raw) async {
             if (raw == null || raw.isEmpty) return <dynamic>[];
             try {
-              final keyStr = ('${u.passphrase}aura_salt_2025').padRight(32).substring(0,32);
+              final passphrase = u['passphrase'] ?? '';
+              final keyStr = ('${passphrase}aura_salt_2025').padRight(32).substring(0,32);
               final key = encryptpkg.Key.fromUtf8(keyStr);
               final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
               final dec = encrypter.decrypt64(raw, iv: _fixedIV);
@@ -595,20 +612,20 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: adherencePct >= 80 ? Colors.green.shade700 
+                      color: adherencePct >= 80 ? Colors.green.shade700
                            : adherencePct >= 50 ? Colors.orange.shade700
-                           : Colors.red.shade700
-                    )
-                  )
-                )
+                           : Colors.red.shade700,
+                    ),
+                  ),
+                ),
               ),
+
               // Bar visualization
               SizedBox(
                 height: maxBar,
                 width: 48,
                 child: Stack(
                   children: [
-                    // Main adherence bar
                     Align(
                       alignment: Alignment.bottomCenter,
                       child: Container(
@@ -618,10 +635,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.teal.shade300,
-                              Colors.teal.shade500,
-                            ],
+                            colors: [Colors.teal.shade300, Colors.teal.shade500],
                           ),
                           borderRadius: BorderRadius.circular(6),
                           boxShadow: [
@@ -634,10 +648,10 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                         ),
                       ),
                     ),
-                    // On-time marker
+
                     if (((stats['takenOnTime'] as int?) ?? 0) > 0)
                       Positioned(
-                        bottom: ((stats['onTimeRate'] as double?) ?? 0.0) / 100.0 * maxBar - 2,
+                        bottom: (((stats['onTimeRate'] as double?) ?? 0.0) / 100.0) * maxBar - 2,
                         left: 12,
                         child: Container(
                           width: 24,
@@ -651,7 +665,9 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                   ],
                 ),
               ),
+
               const SizedBox(height: 6),
+
               // Week label with medication count
               SizedBox(
                 height: 32,
@@ -662,17 +678,15 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                     if (((stats['totalMeds'] as int?) ?? 0) > 0)
                       Text(
                         '${stats['takenMeds'] as int}/${stats['totalMeds'] as int}',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey.shade600
-                        ),
+                        style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
                       ),
                   ],
                 ),
               ),
             ],
           ),
-        );
+        ),
+      );
     }
 
     // Mood values for last 7 days (0..10)
@@ -764,7 +778,8 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     // Seed reminders (encrypted per-user). If no user, skip reminders seeding.
     if (u != null) {
       try {
-        final keyStr = ('${u.passphrase}aura_salt_2025').padRight(32).substring(0,32);
+        final passphrase = u['passphrase'] ?? '';
+        final keyStr = ('${passphrase}aura_salt_2025').padRight(32).substring(0,32);
         final key = encryptpkg.Key.fromUtf8(keyStr);
         final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
 

@@ -136,7 +136,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     const SizedBox(height: 20),
 
                     // Username
-                    TextField(controller: _usernameCtrl, decoration: _inputDecoration('E-mail Address')),
+                    TextField(controller: _usernameCtrl, decoration: _inputDecoration('Username')),
                     const SizedBox(height: 16),
 
                     // Email

@@ -8,7 +8,7 @@ import 'dashboard.dart';
 import 'appointments.dart';
 import 'settings_screen.dart';
 import 'package:flutter_application_1/journal.dart' as journal_lib;
-import 'package:flutter_application_1/reminders.dart' as reminders_lib;
+import 'reminders.dart' as reminders_lib;
 import 'package:flutter_application_1/appointments.dart' as appointments_lib;
 import 'package:encrypt/encrypt.dart' as encryptpkg;
 import 'resources.dart';
@@ -119,9 +119,9 @@ Future<void> _loadTodaysReminders() async {
     final prefs = await SharedPreferences.getInstance();
     final remKey = 'aura_reminders_${u['username']}'; 
 
-    final raw = prefs.getString(remKey);
-    final now = DateTime.now();
-    final List<Map<String, dynamic>> meds = await reminders_lib.loadTodaysReminderMaps();
+  final raw = prefs.getString(remKey);
+  final now = DateTime.now();
+  final List<Map<String, dynamic>> meds = [];
 
     if (raw != null && raw.isNotEmpty) {
       try {
@@ -420,7 +420,7 @@ Widget _buildQuickActions() {
               onPressed: () async {
                 final titleCtrl = TextEditingController();
                 final bodyCtrl = TextEditingController();
-                final res = await showDialog<bool?>(
+                await showDialog<bool?>(
                   context: context,
                   builder: (c) => AlertDialog(
                     title: const Text('Quick Note'),

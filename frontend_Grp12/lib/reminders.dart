@@ -288,136 +288,157 @@ Future<bool?> showAddReminderDialog(BuildContext context) async {
   bool notify = true;
   bool repeat = false;
 
-  final ok = await showDialog<bool?>(context: context, builder: (c) => AlertDialog(
-    title: const Text('Add Reminder'),
-    content: StatefulBuilder(builder: (ctx, setState) => Column(mainAxisSize: MainAxisSize.min, children: [
-      TextField(controller: medCtrl, decoration: const InputDecoration(labelText: 'Medication name', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
-      const SizedBox(height: 8),
-      TextField(controller: doseCtrl, decoration: const InputDecoration(labelText: 'Dosage', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
-      const SizedBox(height: 8),
-      Row(
-        children: [
-          Expanded(
-            child: TextButton(
-              onPressed: () async {
-                final now = DateTime.now();
-                final d = await showDatePicker(context: context, initialDate: selectedDate ?? now, firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 3650)));
-                if (d != null) setState(() => selectedDate = d);
-              },
-              style: TextButton.styleFrom(backgroundColor: const Color(0xFFF3F6F8), foregroundColor: Colors.black87, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-              child: Align(alignment: Alignment.centerLeft, child: Text(selectedDate == null ? 'Select date' : DateFormat.yMMMd().format(selectedDate!))),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: TextButton(
-              onPressed: () async {
-                final t = await showTimePicker(context: context, initialTime: selectedTime ?? TimeOfDay.now());
-                if (t != null) setState(() => selectedTime = t);
-              },
-              style: TextButton.styleFrom(backgroundColor: const Color(0xFFF3F6F8), foregroundColor: Colors.black87, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-              child: Align(alignment: Alignment.centerLeft, child: Text(selectedTime == null ? 'Select time' : selectedTime!.format(context))),
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 8),
-      Row(children: [
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 220),
-          transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
-          child: Icon(notify ? Icons.notifications_active : Icons.notifications_off, key: ValueKey<bool>(notify), color: notify ? Colors.teal : Colors.grey),
+  // ensure user is signed in
+  final u = AuthService().currentUser;
+  if (u == null) {
+    await showDialog(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('Sign in required'),
+      content: const Text('You need to sign in to add reminders.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        TextButton(onPressed: () { Navigator.pop(ctx); Navigator.pushNamed(context, '/login'); }, child: const Text('Sign in')),
+      ],
+    ));
+    return null;
+  }
+
+  final ok = await showDialog<bool?>(
+    context: context,
+    builder: (c) => AlertDialog(
+      title: const Text('Add Reminder'),
+      content: StatefulBuilder(
+        builder: (ctx, setState) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: medCtrl, decoration: const InputDecoration(labelText: 'Medication name', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
+            const SizedBox(height: 8),
+            TextField(controller: doseCtrl, decoration: const InputDecoration(labelText: 'Dosage', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: () async {
+                    final now = DateTime.now();
+                    final d = await showDatePicker(context: context, initialDate: selectedDate ?? now, firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 3650)));
+                    if (d != null) setState(() => selectedDate = d);
+                  },
+                  style: TextButton.styleFrom(backgroundColor: const Color(0xFFF3F6F8), foregroundColor: Colors.black87, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                  child: Align(alignment: Alignment.centerLeft, child: Text(selectedDate == null ? 'Select date' : DateFormat.yMMMd().format(selectedDate!))),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextButton(
+                  onPressed: () async {
+                    final t = await showTimePicker(context: context, initialTime: selectedTime ?? TimeOfDay.now());
+                    if (t != null) setState(() => selectedTime = t);
+                  },
+                  style: TextButton.styleFrom(backgroundColor: const Color(0xFFF3F6F8), foregroundColor: Colors.black87, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                  child: Align(alignment: Alignment.centerLeft, child: Text(selectedTime == null ? 'Select time' : selectedTime!.format(context))),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 8),
+            Row(children: [
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
+                child: Icon(notify ? Icons.notifications_active : Icons.notifications_off, key: ValueKey<bool>(notify), color: notify ? Colors.teal : Colors.grey),
+              ),
+              const SizedBox(width: 8),
+              Checkbox(value: notify, onChanged: (v) => setState(() => notify = v ?? true)),
+              const SizedBox(width: 8),
+              const Expanded(child: Text('Enable notification'))
+            ]),
+            Row(children: [Checkbox(value: repeat, onChanged: (v) => setState(() => repeat = v ?? false)), const SizedBox(width: 8), const Expanded(child: Text('Repeat daily'))]),
+          ],
         ),
-        const SizedBox(width: 8),
-        Checkbox(value: notify, onChanged: (v) => setState(() => notify = v ?? true)),
-        const SizedBox(width: 8),
-        const Expanded(child: Text('Enable notification'))
-      ]),
-      Row(children: [Checkbox(value: repeat, onChanged: (v) => setState(() => repeat = v ?? false)), const SizedBox(width: 8), const Expanded(child: Text('Repeat daily'))]),
-    ])),
-    actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')), TextButton(onPressed: () async {
-      final med = medCtrl.text.trim();
-      final dose = doseCtrl.text.trim();
-      if (med.isEmpty || dose.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter medication name and dosage')));
-        return;
-      }
-      // Build a DateTime from selectedDate and selectedTime. If either is missing, default to now+15min.
-      DateTime finalDt;
-      if (selectedDate != null && selectedTime != null) {
-        finalDt = DateTime(selectedDate!.year, selectedDate!.month, selectedDate!.day, selectedTime!.hour, selectedTime!.minute);
-      } else {
-        finalDt = DateTime.now().add(const Duration(minutes: 15));
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No date/time chosen — defaulting reminder to 15 minutes from now')));
-      }
-      if (finalDt.isBefore(DateTime.now())) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a future time')));
-        return;
-      }
-      
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final raw = prefs.getString('aura_reminders_${u['username']}');
-        List<dynamic> reminders = [];
-        
-        // Get existing reminders
-        if (raw != null && raw.isNotEmpty) {
-          final keyStr = ('${u['passphrase']}aura_salt_2025').padRight(32).substring(0,32);
-          final key = encryptpkg.Key.fromUtf8(keyStr);
-          final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
-          
-          try {
-            final dec = encrypter.decrypt64(raw, iv: _fixedIV);
-            reminders = json.decode(dec) as List<dynamic>;
-          } catch (_) {
-            try {
-              reminders = json.decode(raw) as List<dynamic>;
-            } catch (_) {}
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+        TextButton(onPressed: () async {
+          final med = medCtrl.text.trim();
+          final dose = doseCtrl.text.trim();
+          if (med.isEmpty || dose.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter medication name and dosage')));
+            return;
           }
-        }
-        
-        // Check for duplicates
-        final newReminder = {
-          'id': DateTime.now().millisecondsSinceEpoch.toString(),
-          'medication': med,
-          'dosage': dose,
-          'dateTime': finalDt.toIso8601String(),
-          'enabled': true,
-          'notify': notify,
-          'repeatDaily': repeat,
-          'takenAt': null
-        };
-        
-        bool isDuplicate = reminders.any((r) {
-          try {
-            final existing = r as Map<String, dynamic>;
-            return existing['medication'] == med && 
-                   DateTime.parse(existing['dateTime'] as String).isAtSameMomentAs(finalDt);
-          } catch (_) {
-            return false;
+          DateTime finalDt;
+          if (selectedDate != null && selectedTime != null) {
+            finalDt = DateTime(selectedDate!.year, selectedDate!.month, selectedDate!.day, selectedTime!.hour, selectedTime!.minute);
+          } else {
+            finalDt = DateTime.now().add(const Duration(minutes: 15));
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No date/time chosen — defaulting reminder to 15 minutes from now')));
           }
-        });
-        
-        if (!isDuplicate) {
-          reminders.insert(0, newReminder);
-          final keyStr = ('${u['passphrase']}aura_salt_2025').padRight(32).substring(0,32);
-          final key = encryptpkg.Key.fromUtf8(keyStr);
-          final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
-          final payload = json.encode(reminders);
-          final encrypted = encrypter.encrypt(payload, iv: _fixedIV).base64;
-          await prefs.setString('aura_reminders_${u['username']}', encrypted);
-          remindersNotifier.value = remindersNotifier.value + 1;
-        }
-      } catch (_) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to save reminder')));
-        return;
-      }
-      Navigator.pop(c, true);
-    }, child: const Text('Save'))],
-  ));
+          if (finalDt.isBefore(DateTime.now())) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a future time')));
+            return;
+          }
+
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            final raw = prefs.getString('aura_reminders_${u['username']}');
+            List<dynamic> reminders = [];
+
+            if (raw != null && raw.isNotEmpty) {
+              final passphrase = u['passphrase'] ?? '';
+              final keyStr = ('${passphrase}aura_salt_2025').padRight(32).substring(0,32);
+              final key = encryptpkg.Key.fromUtf8(keyStr);
+              final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
+
+              try {
+                final dec = encrypter.decrypt64(raw, iv: _fixedIV);
+                reminders = json.decode(dec) as List<dynamic>;
+              } catch (_) {
+                try {
+                  reminders = json.decode(raw) as List<dynamic>;
+                } catch (_) {}
+              }
+            }
+
+            final newReminder = {
+              'id': DateTime.now().millisecondsSinceEpoch.toString(),
+              'medication': med,
+              'dosage': dose,
+              'dateTime': finalDt.toIso8601String(),
+              'enabled': true,
+              'notify': notify,
+              'repeatDaily': repeat,
+              'takenAt': null
+            };
+
+            bool isDuplicate = reminders.any((r) {
+              try {
+                final existing = r as Map<String, dynamic>;
+                return existing['medication'] == med && DateTime.parse(existing['dateTime'] as String).isAtSameMomentAs(finalDt);
+              } catch (_) {
+                return false;
+              }
+            });
+
+            if (!isDuplicate) {
+              reminders.insert(0, newReminder);
+              final passphrase = u['passphrase'] ?? '';
+              final keyStr = ('${passphrase}aura_salt_2025').padRight(32).substring(0,32);
+              final key = encryptpkg.Key.fromUtf8(keyStr);
+              final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
+              final payload = json.encode(reminders);
+              final encrypted = encrypter.encrypt(payload, iv: _fixedIV).base64;
+              await prefs.setString('aura_reminders_${u['username']}', encrypted);
+              remindersNotifier.value = remindersNotifier.value + 1;
+            }
+          } catch (_) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to save reminder')));
+            return;
+          }
+          Navigator.pop(c, true);
+        }, child: const Text('Save'))
+      ],
+    ),
+  );
 
   if (ok == true) {
-    // nothing extra needed here; callers listen to remindersNotifier or reload
+    // callers listen to remindersNotifier or reload
   }
   return ok;
 }
@@ -459,12 +480,6 @@ Future<bool?> showAddReminderDialog(BuildContext context) async {
     }
   }
 
-  Future<void> _toggleNotify(int index) async {
-    _reminders[index].notify = !_reminders[index].notify;
-    await _saveForCurrentUser();
-    try { remindersNotifier.value = remindersNotifier.value + 1; } catch (_) {}
-    setState(() {});
-  }
 
   // Deletion handled inline where needed. (Removed unused helper to satisfy analyzer.)
 
@@ -505,16 +520,17 @@ Future<bool?> showAddReminderDialog(BuildContext context) async {
 
   @override
   Widget build(BuildContext context) {
-    // Ensure we have loaded reminders at least once. This guards against the
-    // case where the widget is rebuilt (e.g., tab switch) before initState's
-    // async load completes — call load once from build if needed.
+    // Simpler, safer build to avoid complex nested builder/parens issues.
     if (!_loadedOnce) {
-      _loadedOnce = true; // mark immediately to avoid repeated calls
-      // schedule async load after build
+      _loadedOnce = true;
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadIfAuthenticated());
     }
+
     final user = AuthService().currentUser;
     final bottomPad = MediaQuery.of(context).viewPadding.bottom + kBottomNavigationBarHeight + 24.0;
+
+    // Build a straightforward column with today's meds, history and actions.
+    final todays = _todaysMeds();
     return SafeArea(
       bottom: true,
       child: SingleChildScrollView(
@@ -522,228 +538,106 @@ Future<bool?> showAddReminderDialog(BuildContext context) async {
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Smart Reminders', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
-        Card(child: Padding(padding: const EdgeInsets.all(16.0), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Row(children: [Icon(Icons.edit, color: Colors.teal), SizedBox(width:8), Text("Today's Medication Schedule", style: TextStyle(fontWeight: FontWeight.bold))]),
-          const SizedBox(height:8),
-          const Text('Track your daily medication routine', style: TextStyle(color: Colors.grey)),
-          const SizedBox(height:12),
-          // Today's meds list
-          FutureBuilder<void>(future: Future.value(), builder: (context, snap) {
-            final meds = _todaysMeds();
-            if (meds.isEmpty) return const Padding(padding: EdgeInsets.symmetric(vertical:24), child: Center(child: Text('No medication reminders for today')));
-            // build today's reminder widgets using a for-loop for clarity
-            final widgets = <Widget>[];
-            for (final r in meds) {
-              final s = r.status();
-              final bg = s == ReminderStatus.taken ? Colors.green.shade50 : Colors.white;
-              widgets.add(
-                AnimatedOpacity(
-                  duration: const Duration(milliseconds: 500),
-                  opacity: _fading.contains(r.id) ? 0.0 : 1.0,
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(vertical:6),
-                    decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade200)),
-                    child: ListTile(
-                      leading: Icon(s==ReminderStatus.taken?Icons.check_circle:Icons.circle_outlined, color: s==ReminderStatus.taken?Colors.green:Colors.grey),
-                      title: Row(children: [
-                        Expanded(child: Text('${r.medication} • ${r.dosage}', style: const TextStyle(fontWeight: FontWeight.bold))),
-                      ]),
-                      subtitle: Row(children: [
-                        Text(TimeOfDay.fromDateTime(r.dateTime).format(context)),
-                        const SizedBox(width: 8),
-                        if (r.repeatDaily)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(color: Colors.purple.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.purple.shade200)),
-                            child: Row(children: const [Icon(Icons.repeat, size: 12, color: Colors.purple), SizedBox(width: 6), Text('Daily', style: TextStyle(fontSize: 11, color: Colors.purple))]),
-                          ),
-                      ]),
-                      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                        if (s != ReminderStatus.pending) ...[ _statusBadge(s), const SizedBox(width:8) ],
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () {},
-                            child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 220),
-                              transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
-                              child: Icon(
-                                !r.enabled ? Icons.notifications_off : (r.notify ? Icons.notifications_active : Icons.notifications_off),
-                                key: ValueKey('${r.enabled}-${r.notify}'),
-                                color: !r.enabled ? Colors.grey.shade400 : (r.notify ? Colors.teal : Colors.grey),
-                              ),
-                            ),
-                          ),
-                        ),
-                        Switch(value: r.notify, onChanged: (v) { final orig = _reminders.indexWhere((x)=>x.id==r.id); if (orig!=-1) _toggleNotify(orig); }),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline),
-                          tooltip: 'Remove reminder',
-                          onPressed: () async {
-                            final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(title: const Text('Remove reminder?'), content: const Text('Remove this reminder from your schedule?'), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Remove'))]));
-                            if (ok == true) {
-                              _reminders.removeWhere((x) => x.id == r.id);
-                              await _saveForCurrentUser();
-                              try { remindersNotifier.value = remindersNotifier.value + 1; } catch (_) {}
-                              setState(() {});
-                            }
-                          },
-                        ),
-                      ]),
-                      onTap: () { if (r.takenAt == null) { final orig = _reminders.indexWhere((x)=>x.id==r.id); if (orig!=-1) _toggleTaken(orig); } },
-                    ),
-                  ),
-                );
-            }
-            return Column(children: widgets);
-          }),
-          const SizedBox(height:12),
-          // Add reminder button
-          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-            ElevatedButton.icon(
-              onPressed: () {
-                if (user == null) {
-                  showDialog(context: context, builder: (ctx) => AlertDialog(
-                    title: const Text('Sign in required'),
-                    content: const Text('You need to sign in to manage reminders. Would you like to sign in now?'),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-                      TextButton(onPressed: () {
-                        Navigator.pop(ctx);
-                        Navigator.pushNamed(context, '/login');
-                      }, child: const Text('Sign in'))
-                    ],
-                  ));
-                  return;
-                }
-                _addOrEditReminder();
-              },
-              icon: const Icon(Icons.add),
-              label: const Text('Add Reminder'),
-            )
-          ])
-        ]))),
-        const SizedBox(height:12),
-        // Reminder history
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Row(children: [Icon(Icons.history, color: Colors.teal), SizedBox(width: 8), Text('Reminder History', style: TextStyle(fontWeight: FontWeight.bold))]),
-              const SizedBox(height: 8),
-              // Reminder history (single instance)
-              _history.isEmpty
-                  ? const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Text('No recent activity'))
-                  : SizedBox(
-                      height: (_history.length < 5 ? _history.length : 5) * 64.0,
-                      child: ListView.builder(
-                        itemCount: _history.length,
-                        itemBuilder: (context, i) {
-                          final h = _history[i];
-                          return Container(
-                            margin: const EdgeInsets.symmetric(vertical: 6),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(8)),
-                            child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('${h['medication']}'), Text(h['status'], style: const TextStyle(color: Colors.black))]),
-                          );
-                        },
-                      ),
-                    ),
-              const SizedBox(height: 8),
-              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                TextButton(
-                  onPressed: _history.isEmpty
-                      ? null
-                      : () async {
-                          final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(title: const Text('Clear history?'), content: const Text('This will permanently remove your reminder history. Continue?'), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Clear'))]));
-                          if (ok == true) {
-                            _history.clear();
-                            await _saveForCurrentUser();
-                            setState(() {});
-                          }
-                        },
-                  child: const Text('Clear History'),
-                ),
-              ])
-            ]),
-          ),
-        ),
-        const SizedBox(height:12),
-        // Appointments section
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Row(children: [Icon(Icons.calendar_today, color: Colors.purple), SizedBox(width: 8), Text('Upcoming Appointments', style: TextStyle(fontWeight: FontWeight.bold))]),
-              const SizedBox(height: 8),
-              FutureBuilder<List<Appointment>>(
-                future: _loadTodaysAppointments(),
-                builder: (context, snap) {
-                  if (snap.connectionState == ConnectionState.waiting) return const SizedBox.shrink();
-                  final list = snap.data ?? [];
-                  if (list.isEmpty) return const Text('No appointments scheduled for today');
-                  return Column(
-                    children: list.map((a) {
-                      return Container(
-                        margin: const EdgeInsets.symmetric(vertical: 6),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade200)),
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(a.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 6),
-                          Text(a.provider),
-                          const SizedBox(height: 6),
-                          Row(children: [const Icon(Icons.access_time, size: 16, color: Colors.grey), const SizedBox(width: 6), Text(TimeOfDay.fromDateTime(a.dateTime).format(context))]),
-                          const SizedBox(height: 6),
-                          Row(children: [const Icon(Icons.location_on, size: 16, color: Colors.grey), const SizedBox(width: 6), Text(a.location)]),
-                          const SizedBox(height: 8),
-                          Row(children: [TextButton.icon(onPressed: () {}, icon: const Icon(Icons.place), label: const Text('Directions')), const SizedBox(width: 8), TextButton.icon(onPressed: () {}, icon: const Icon(Icons.edit), label: const Text('Edit Reminder'))])
+            const Text('Smart Reminders', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+
+            // Today's meds
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Row(children: [Icon(Icons.edit, color: Colors.teal), SizedBox(width:8), Text("Today's Medication Schedule", style: TextStyle(fontWeight: FontWeight.bold))]),
+                  const SizedBox(height:8),
+                  if (todays.isEmpty)
+                    const Padding(padding: EdgeInsets.symmetric(vertical:24), child: Center(child: Text('No medication reminders for today')))
+                  else
+                    ...todays.map((r) {
+                      final s = r.status();
+                      return ListTile(
+                        leading: Icon(s==ReminderStatus.taken?Icons.check_circle:Icons.circle_outlined, color: s==ReminderStatus.taken?Colors.green:Colors.grey),
+                        title: Text('${r.medication} • ${r.dosage}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text(TimeOfDay.fromDateTime(r.dateTime).format(context)),
+                        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                          if (s != ReminderStatus.pending) _statusBadge(s),
+                          const SizedBox(width: 8),
+                          IconButton(icon: const Icon(Icons.delete_outline), onPressed: () async { _reminders.removeWhere((x) => x.id == r.id); await _saveForCurrentUser(); try { remindersNotifier.value = remindersNotifier.value + 1; } catch (_) {} setState(() {}); }),
                         ]),
+                        onTap: () { if (r.takenAt == null) { final orig = _reminders.indexWhere((x)=>x.id==r.id); if (orig!=-1) _toggleTaken(orig); } },
                       );
                     }).toList(),
-                  );
-                },
+                  const SizedBox(height: 8),
+                  Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                    ElevatedButton.icon(onPressed: () { if (user == null) { showDialog(context: context, builder: (ctx)=>AlertDialog(title: const Text('Sign in required'), content: const Text('You need to sign in to manage reminders.'), actions: [TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text('OK'))])); return; } _addOrEditReminder(); }, icon: const Icon(Icons.add), label: const Text('Add Reminder'))
+                  ])
+                ]),
               ),
-            ]),
-          ),
-        ),
-        const SizedBox(height:12),
-        // AI preferences placeholder
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('AI Learning Preferences', style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                const Expanded(child: Text('Context Learning\nLearn from your daily routines and patterns')),
-                Switch(value: true, onChanged: (_) {}),
-              ]),
-              const SizedBox(height: 8),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                const Expanded(child: Text('Pattern Recognition\nIdentify trends in your medication adherence')),
-                Switch(value: true, onChanged: (_) {}),
-              ]),
-              const SizedBox(height: 8),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                const Expanded(child: Text('Personalized Timing\nAdjust reminder times based on your schedule')),
-                Switch(value: false, onChanged: (_) {}),
-              ]),
-            ]),
-          ),
-        ),
-      ],
-      ),
-    ),
-  ),
-);
-}
+            ),
 
-}
+            const SizedBox(height:12),
+
+            // Reminder history (simple)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Row(children: [Icon(Icons.history, color: Colors.teal), SizedBox(width: 8), Text('Reminder History', style: TextStyle(fontWeight: FontWeight.bold))]),
+                  const SizedBox(height: 8),
+                  if (_history.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Text('No recent activity')) else SizedBox(height: (_history.length < 5 ? _history.length : 5) * 64.0, child: ListView.builder(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: _history.length, itemBuilder: (context,i){ final h = _history[i]; return Container(margin: const EdgeInsets.symmetric(vertical:6), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(8)), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('${h['medication']}'), Text(h['status'], style: const TextStyle(color: Colors.black))])); })),
+                  const SizedBox(height:8),
+                  Row(mainAxisAlignment: MainAxisAlignment.end, children: [ TextButton(onPressed: _history.isEmpty ? null : () async { final ok = await showDialog<bool>(context: context, builder: (ctx)=>AlertDialog(title: const Text('Clear history?'), content: const Text('This will permanently remove your reminder history. Continue?'), actions: [TextButton(onPressed: ()=>Navigator.pop(ctx,false), child: const Text('Cancel')), TextButton(onPressed: ()=>Navigator.pop(ctx,true), child: const Text('Clear'))])); if (ok==true) { _history.clear(); await _saveForCurrentUser(); setState(() {}); } }, child: const Text('Clear History')) ])
+                ]),
+              ),
+            ),
+
+            const SizedBox(height:12),
+
+            // Appointments (simplified and balanced)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(children: [Icon(Icons.calendar_today, color: Colors.purple), SizedBox(width: 8), Text('Upcoming Appointments', style: TextStyle(fontWeight: FontWeight.bold))]),
+                    const SizedBox(height: 8),
+                    FutureBuilder<List<Appointment>>(
+                      future: _loadTodaysAppointments(),
+                      builder: (context, snap) {
+                        if (snap.connectionState == ConnectionState.waiting) return const SizedBox.shrink();
+                        final list = snap.data ?? [];
+                        if (list.isEmpty) return const Text('No appointments scheduled for today');
+                        return Column(
+                          children: list.map((a) {
+                            return Container(
+                              margin: const EdgeInsets.symmetric(vertical: 6),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade200)),
+                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Text(a.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 6),
+                                Text(a.provider),
+                                const SizedBox(height: 6),
+                                Row(children: [const Icon(Icons.access_time, size: 16, color: Colors.grey), const SizedBox(width: 6), Text(TimeOfDay.fromDateTime(a.dateTime).format(context))]),
+                                const SizedBox(height: 6),
+                                Row(children: [const Icon(Icons.location_on, size: 16, color: Colors.grey), const SizedBox(width: 6), Text(a.location)]),
+                                const SizedBox(height: 8),
+                                Row(children: [TextButton.icon(onPressed: () {}, icon: const Icon(Icons.place), label: const Text('Directions')), const SizedBox(width: 8), TextButton.icon(onPressed: () {}, icon: const Icon(Icons.edit), label: const Text('Edit Reminder'))])
+                              ]),
+                            );
+                          }).toList(),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          ]),
+        ),
+      ),
+    );
+  }
 
 // Helper: load today's reminder maps for the current user (decrypted if needed).
 Future<List<Map<String, dynamic>>> loadTodaysReminderMaps() async {
@@ -760,8 +654,7 @@ Future<List<Map<String, dynamic>>> loadTodaysReminderMaps() async {
     final passphrase = u['passphrase'] ?? 'default_pass';
     final keyStr = ('${passphrase}aura_salt_2025').padRight(32).substring(0, 32);
     final key = encryptpkg.Key.fromUtf8(keyStr);
-    final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
-    final iv = encryptpkg.IV.fromLength(16);
+  final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
 
     try {
       final dec = encrypter.decrypt64(raw, iv: _fixedIV);
@@ -796,4 +689,6 @@ Future<List<Map<String, dynamic>>> loadTodaysReminderMaps() async {
   } catch (_) {}
 
   return out;
+}
+
 }
