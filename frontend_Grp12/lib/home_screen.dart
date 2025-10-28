@@ -25,6 +25,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<Appointment> _todaysAppointments = [];
   final List<Map<String, dynamic>> _todaysMedReminders = [];
   int _selectedIndex = 0;
+  String? _aiInsight;
+  bool _showAIInsight = true;
 
   static const _storageKey = 'aura_appointments';
 
@@ -36,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadTodaysAppointments();
     // load reminders for today's activity and listen for changes
     _loadTodaysReminders();
+    _generateAIInsight();
   try { reminders_lib.remindersNotifier.addListener(_onRemindersChanged); } catch (_) {}
   try { appointments_lib.appointmentsNotifier.addListener(_onAppointmentsChanged); } catch (_) {}
   }
@@ -69,6 +72,122 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _onAppointmentsChanged() {
     _loadTodaysAppointments();
+  }
+
+  Future<void> _generateAIInsight() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      const key = 'aura_mood_entries';
+      final raw = prefs.getString(key);
+      
+      if (raw == null || raw.isEmpty) {
+        setState(() => _aiInsight = null);
+        return;
+      }
+
+      final list = json.decode(raw) as List<dynamic>;
+      if (list.isEmpty) {
+        setState(() => _aiInsight = null);
+        return;
+      }
+
+      // Analyze last 7 days of mood data
+      final now = DateTime.now();
+      final sevenDaysAgo = now.subtract(const Duration(days: 7));
+      
+      final recentMoods = list.where((entry) {
+        try {
+          final dt = DateTime.parse(entry['dateTime'] as String);
+          return dt.isAfter(sevenDaysAgo);
+        } catch (_) {
+          return false;
+        }
+      }).toList();
+
+      if (recentMoods.isEmpty) {
+        setState(() => _aiInsight = null);
+        return;
+      }
+
+      // Calculate average mood intensity
+      double totalIntensity = 0;
+      int count = 0;
+      List<int> intensities = [];
+      
+      for (final mood in recentMoods) {
+        try {
+          final value = mood['value'] as int;
+          totalIntensity += value;
+          intensities.add(value);
+          count++;
+        } catch (_) {}
+      }
+
+      if (count == 0) {
+        setState(() => _aiInsight = null);
+        return;
+      }
+
+      final avgIntensity = totalIntensity / count;
+      
+      // Analyze trend (improving, declining, stable)
+      String? insight;
+      
+      if (intensities.length >= 3) {
+        // Calculate trend by comparing first half vs second half
+        final midPoint = intensities.length ~/ 2;
+        final firstHalf = intensities.sublist(0, midPoint);
+        final secondHalf = intensities.sublist(midPoint);
+        
+        final firstAvg = firstHalf.reduce((a, b) => a + b) / firstHalf.length;
+        final secondAvg = secondHalf.reduce((a, b) => a + b) / secondHalf.length;
+        
+        final difference = secondAvg - firstAvg;
+        
+        if (difference > 1.5) {
+          // Improving trend
+          insight = "🌟 Your mood has been steadily improving over the past week. Consider noting what's been helping you feel better.";
+        } else if (difference < -1.5) {
+          // Declining trend
+          insight = "💙 Your mood has been lower lately. Remember, it's okay to reach out for support. Consider talking to someone you trust.";
+        } else if (avgIntensity >= 7) {
+          // Stable and positive
+          insight = "✨ You've maintained a positive mood this week! Keep up the activities and routines that make you feel good.";
+        } else if (avgIntensity <= 4) {
+          // Stable but low
+          insight = "🌱 Your mood has been challenging. Small steps like going outside, staying hydrated, or talking to a friend can help.";
+        } else {
+          // Stable and neutral
+          insight = "🔄 Your mood has been relatively stable. Consider trying new activities that bring you joy.";
+        }
+      } else {
+        // Not enough data for trend, just give general insight
+        if (avgIntensity >= 7) {
+          insight = "😊 You're doing well! Keep tracking your mood to discover patterns that help you thrive.";
+        } else if (avgIntensity <= 4) {
+          insight = "💚 Thank you for tracking your mood. Remember, seeking support is a sign of strength, not weakness.";
+        } else {
+          insight = "📊 Keep logging your mood to unlock personalized insights about your emotional patterns.";
+        }
+      }
+
+      // Check for consistency patterns
+      if (count >= 5) {
+        final hasConsistentHigh = intensities.where((i) => i >= 8).length >= 3;
+        final hasConsistentLow = intensities.where((i) => i <= 3).length >= 3;
+        
+        if (hasConsistentHigh) {
+          insight = "🎉 You've had several great days this week! Your consistency shows strong emotional wellness.";
+        } else if (hasConsistentLow) {
+          insight = "🤗 Multiple low mood days suggest you might benefit from extra self-care or professional support.";
+        }
+      }
+
+      setState(() => _aiInsight = insight);
+    } catch (e) {
+      debugPrint('Error generating AI insight: $e');
+      setState(() => _aiInsight = null);
+    }
   }
 
   Future<void> _loadTodaysAppointments() async {
@@ -254,6 +373,88 @@ Future<void> _loadTodaysReminders() async {
     );
   }
 
+  // AI Insights Card
+  Widget _buildAIInsightsCard() {
+    if (_aiInsight == null || !_showAIInsight) {
+      return const SizedBox.shrink();
+    }
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          gradient: LinearGradient(
+            colors: [Colors.purple.shade50, Colors.blue.shade50],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.psychology,
+                      color: Colors.purple,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'AI Insights',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    tooltip: 'Dismiss',
+                    onPressed: () => setState(() => _showAIInsight = false),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                _aiInsight!,
+                style: const TextStyle(
+                  fontSize: 15,
+                  height: 1.5,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Refresh Insight'),
+                  onPressed: () => _generateAIInsight(),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.purple,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   // First-run overview for new users (no data yet)
   Widget _buildFirstRunOverviewCard() {
@@ -1082,7 +1283,7 @@ Future<bool?> _showLogMoodDialog() async {
                 print('Local save error: $e');
               }
 
-              // Update Today's Activity UI
+              // Update Today's Activity UI and regenerate AI insight
               if (mounted) {
                 setState(() {
                   final feelingsStr = feelingsList.isEmpty 
@@ -1102,6 +1303,9 @@ Future<bool?> _showLogMoodDialog() async {
                     'source': 'mood',
                   });
                 });
+                
+                // Regenerate AI insight with new mood data
+                _generateAIInsight();
               }
             }
           },
@@ -1372,6 +1576,7 @@ Future<bool?> _showLogMedicationDialog() async {
             children: [
               if (_showWelcome) _buildFirstRunOverviewCard() else (_todayActivity.isEmpty ? _buildEmptyActivityPlaceholder() : _buildTodaysActivityCard()),
               const SizedBox(height: 12),
+              _buildAIInsightsCard(),
               const SizedBox(height: 12),
               _buildQuickActions(),
               const SizedBox(height: 12),
@@ -1691,5 +1896,4 @@ Future<bool> saveAppointmentToBackend({
     return false;
   }
 }
-
 }
