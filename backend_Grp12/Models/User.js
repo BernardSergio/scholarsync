@@ -6,8 +6,6 @@ const userSchema = new mongoose.Schema(
   {
     username: { type: String, required: true, unique: true, trim: true },
     password: { type: String, required: true }, // hashed password
-
-    // ✅ New fields
     email: {
       type: String,
       required: true,
@@ -16,32 +14,25 @@ const userSchema = new mongoose.Schema(
       trim: true,
       match: [/^\S+@\S+\.\S+$/, "Invalid email address"],
     },
-    number: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-
-    // User role
+    number: { type: String, required: true, trim: true },
     role: { type: String, default: "user" },
-
-    // Security & session
     failedLoginAttempts: { type: Number, default: 0 },
     lockUntil: { type: Date, default: null },
     lastActive: { type: Date, default: null },
-
-    // Biometric placeholders (optional for later)
     biometricEnabled: { type: Boolean, default: false },
     biometricMeta: { type: Object, default: null },
+
+    // ✅ Add these fields for password reset
+    resetPasswordToken: { type: String, default: null },
+    resetPasswordExpires: { type: Date, default: null },
   },
   { timestamps: true }
 );
 
-// ✅ Create unique indexes for username and email
+// Indexes, pre-save hook, methods, etc. remain the same
 userSchema.index({ username: 1 }, { unique: true });
 userSchema.index({ email: 1 }, { unique: true });
 
-// ✅ Hash password before saving
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
   const salt = await bcrypt.genSalt(10);
@@ -49,17 +40,14 @@ userSchema.pre("save", async function (next) {
   next();
 });
 
-// ✅ Compare entered password with hashed password
 userSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-// ✅ Check if account is locked
 userSchema.methods.isLocked = function () {
   return this.lockUntil && this.lockUntil > Date.now();
 };
 
-// ✅ Hide sensitive fields when converting to JSON (for responses)
 userSchema.set("toJSON", {
   transform: (doc, ret) => {
     ret.id = ret._id;

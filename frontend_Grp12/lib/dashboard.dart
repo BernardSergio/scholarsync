@@ -98,220 +98,84 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
   }
 
   Future<void> _loadDataForMonth(DateTime month) async {
-    _dayStatus.clear();
-    _dayDetails.clear();
-
-    final u = AuthService().currentUser;
-    if (u == null) { setState(() {}); return; }
-
-    debugPrint('Loading data for ${DateFormat.yMMM().format(month)}');
-    final prefs = await SharedPreferences.getInstance();
-
-    // helper to decode (decrypt) stored JSON if possible, else return plaintext parse
-    Future<List<dynamic>> _decodeList(String? raw) async {
-      if (raw == null || raw.isEmpty) return <dynamic>[];
-      // try decrypt
-      try {
-        final key = await _keyForUser();
-        if (key != null) {
-          final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
-          final dec = encrypter.decrypt64(raw, iv: _fixedIV);
-          return json.decode(dec) as List<dynamic>;
-        }
-      } catch (_) {}
-      // fallback plaintext
-      try {
-        return json.decode(raw) as List<dynamic>;
-      } catch (_) {
-        return <dynamic>[];
+  _dayStatus.clear();
+  _dayDetails.clear();
+  final u = AuthService().currentUser;
+  if (u == null) { setState(() {}); return; }
+  final prefs = await SharedPreferences.getInstance();
+  Future<List<dynamic>> decodeList(String? raw) async {
+    if (raw == null || raw.isEmpty) return <dynamic>[];
+    try {
+      final key = await _keyForUser();
+      if (key != null) {
+        final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
+        final dec = encrypter.decrypt64(raw, iv: _fixedIV);
+        return json.decode(dec) as List<dynamic>;
       }
+    } catch (_) {}
+    try {
+      return json.decode(raw) as List<dynamic>;
+    } catch (_) {
+      return <dynamic>[];
     }
-
-    int totalForMonth = 0;
-    int takenForMonth = 0;
-
-    // Load active reminders
-    final rawRem = prefs.getString('aura_reminders_${u.username}');
-    final remList = await _decodeList(rawRem);
-    try { debugPrint('Dashboard: loaded ${remList.length} reminders for user ${u.username}'); } catch (_) {}
-    final now = DateTime.now();
-
-    for (final e in remList) {
-      try {
-        final Map<String, dynamic> m = Map<String, dynamic>.from(e as Map);
-        try { debugPrint('Dashboard: reminder raw dateTime=${m['dateTime']}'); } catch (_) {}
-        if (m['dateTime'] == null) continue;
-        final dt = DateTime.parse(m['dateTime'] as String).toLocal();
-        try { debugPrint('Dashboard: parsed dt=$dt'); } catch (_) {}
-        final key = DateFormat('yyyy-MM-dd').format(dt);
-        try { debugPrint('Dashboard: computed key=$key'); } catch (_) {}
-
-        // normalize fields: ensure 'takenAt' key exists (null if none)
-        final entry = {
-          'id': m['id'] ?? '',
-          'medication': m['medication'] ?? '',
-          'dosage': m['dosage'] ?? '',
-          'dateTime': (m['dateTime'] ?? '').toString(),
-          'takenAt': m['takenAt'] ?? null,
-          'source': 'reminder'
-        };
-        _dayDetails.putIfAbsent(key, () => []).add(entry);
-
-        // Update status for visible month
-        final dayStart = DateTime(dt.year, dt.month, dt.day);
-        final nowDayStart = DateTime(now.year, now.month, now.day);
-        if (dayStart.month == month.month && dayStart.year == month.year) {
-          final taken = entry['takenAt'] != null;
-          if (taken) {
-            _dayStatus[key] = DayStatus.taken;
-            takenForMonth++;
+  }
+  int totalForMonth = 0;
+  int takenForMonth = 0;
+  final rawRem = prefs.getString('aura_reminders_${u['username']}'); // Fixed here
+  final remList = await decodeList(rawRem);
+  for (final e in remList) {
+    try {
+      final Map<String, dynamic> m = Map<String, dynamic>.from(e as Map);
+      if (m['dateTime'] == null) continue;
+      final dt = DateTime.parse(m['dateTime'] as String).toLocal();
+      final key = DateFormat('yyyy-MM-dd').format(dt);
+      final entry = {
+        'id': m['id'] ?? '',
+        'medication': m['medication'] ?? '',
+        'dosage': m['dosage'] ?? '',
+        'dateTime': (m['dateTime'] ?? '').toString(),
+        'takenAt': m['takenAt'],
+        'source': 'reminder'
+      };
+      _dayDetails.putIfAbsent(key, () => []).add(entry);
+      final dayStart = DateTime(dt.year, dt.month, dt.day);
+      final nowDayStart = DateTime.now();
+      if (dayStart.month == month.month && dayStart.year == month.year) {
+        final taken = entry['takenAt'] != null;
+        if (taken) {
+          _dayStatus[key] = DayStatus.taken;
+          takenForMonth++;
+          totalForMonth++;
+        } else if (dayStart.isBefore(nowDayStart)) {
+          if (_dayStatus[key] != DayStatus.taken) {
+            _dayStatus[key] = DayStatus.missed;
             totalForMonth++;
-          } else if (dayStart.isBefore(nowDayStart)) {
-            // past and not taken
+          }
+        } else if (dayStart.isAtSameMomentAs(nowDayStart)) {
+          if (dt.isBefore(DateTime.now())) {
             if (_dayStatus[key] != DayStatus.taken) {
               _dayStatus[key] = DayStatus.missed;
               totalForMonth++;
             }
-          } else if (dayStart.isAtSameMomentAs(nowDayStart)) {
-            // today: if scheduled time passed -> missed, else pending
-            if (dt.isBefore(now)) {
-              if (_dayStatus[key] != DayStatus.taken) {
-                _dayStatus[key] = DayStatus.missed;
-                totalForMonth++;
-              }
-            } else {
-              // Future reminders for today - mark as pending and count them
-              if (_dayStatus[key] == null) {
-                _dayStatus[key] = DayStatus.nodata;
-              }
-              totalForMonth++;  // Count future reminders!
-            }
           } else {
-            _dayStatus[key] = DayStatus.nodata;
-          }
-        }
-      } catch (_) {}
-    }
-
-    // Load reminder history (taken entries)
-    final rawHist = prefs.getString('aura_reminder_history_${u.username}');
-    final histList = await _decodeList(rawHist);
-    for (final h in histList) {
-      try {
-        final Map<String, dynamic> hm = Map<String, dynamic>.from(h as Map);
-        if ((hm['status'] ?? '') == 'taken' && hm['when'] != null) {
-          final dt = DateTime.parse(hm['when'] as String).toLocal();
-          final key = DateFormat('yyyy-MM-dd').format(dt);
-          final entry = {
-            'id': hm['id'] ?? '',
-            'medication': hm['medication'] ?? '',
-            'dosage': hm['dosage'] ?? '',
-            'dateTime': hm['when'],
-            'takenAt': hm['when'],
-            'source': 'history'
-          };
-          _dayDetails.putIfAbsent(key, () => []).add(entry);
-          // mark taken if not already
-          if (_dayStatus[key] != DayStatus.taken) {
-            final dayStart = DateTime(dt.year, dt.month, dt.day);
-            if (dayStart.month == month.month && dayStart.year == month.year) {
-              takenForMonth++;
-              totalForMonth++;
+            if (_dayStatus[key] == null) {
+              _dayStatus[key] = DayStatus.nodata;
             }
-            _dayStatus[key] = DayStatus.taken;
+            totalForMonth++;
           }
-        }
-      } catch (_) {}
-    }
-
-    // compute monthly adherence percent
-    if (totalForMonth > 0) {
-      _monthAdherencePercent = (takenForMonth / totalForMonth) * 100.0;
-    } else {
-      _monthAdherencePercent = 0.0;
-    }
-
-    // compute weekly adherence buckets (4-week simple slices)
-    _weeklyAdherencePct.clear();
-    final days = DateTime(month.year, month.month + 1, 0).day;
-    for (int w = 0; w < 4; w++) {
-      int wkTotal = 0;
-      int wkTaken = 0;
-      final start = w * 7 + 1;
-      for (int d = start; d <= (start + 6) && d <= days; d++) {
-        final key = DateFormat('yyyy-MM-dd').format(DateTime(month.year, month.month, d));
-        final s = _dayStatus[key];
-        if (s != null && s != DayStatus.nodata) {
-          wkTotal++;
-          if (s == DayStatus.taken) wkTaken++;
+        } else {
+          _dayStatus[key] = DayStatus.nodata;
         }
       }
-      final pct = wkTotal == 0 ? 0.0 : (wkTaken / wkTotal) * 100.0;
-      _weeklyAdherencePct[w+1] = pct;
-    }
-
-    // load mood entries for the last 7 days
-    await _loadMoodData();
-
-    setState(() {});
+    } catch (_) {}
   }
-
-  Future<void> _loadMoodData() async {
-    // Read journal entries and aggregate mood scores per day (attempt to parse numeric mood values)
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      const key = 'aura_journal_entries';
-      final raw = prefs.getString(key) ?? '[]';
-      final list = json.decode(raw) as List<dynamic>;
-      final Map<String, List<double>> sums = {};
-      for (final e in list) {
-        try {
-          final m = Map<String, dynamic>.from(e as Map);
-          final type = (m['type'] ?? 0) as int;
-          if (type != 0) continue; // only mood entries
-          final dt = DateTime.parse(m['dateTime'] as String).toLocal();
-          final keyDate = DateFormat('yyyy-MM-dd').format(dt);
-          // Try to parse a numeric mood score from title or body (look for 0-10 or x/10 patterns)
-          double? val;
-          final title = (m['title'] ?? '').toString();
-          final body = (m['body'] ?? '').toString();
-          final RegExp r1 = RegExp(r"(\b[0-9](?:\.[0-9])?)/?10\b");
-          final RegExp r2 = RegExp(r"\b([0-9](?:\.[0-9])?)\b");
-          final match1 = r1.firstMatch(title) ?? r1.firstMatch(body);
-          if (match1 != null) {
-            val = double.tryParse(match1.group(1)!);
-          } else {
-            final match2 = r2.firstMatch(title) ?? r2.firstMatch(body);
-            if (match2 != null) val = double.tryParse(match2.group(1)!);
-          }
-          if (val == null) continue;
-          // clamp to 0-10
-          if (val < 0) val = 0; if (val > 10) val = 10;
-          sums.putIfAbsent(keyDate, () => []).add(val);
-        } catch (_) {}
-      }
-      _moodByDate.clear();
-      sums.forEach((k, vals) {
-        if (vals.isNotEmpty) _moodByDate[k] = vals.reduce((a,b)=>a+b)/vals.length;
-      });
-    } catch (_) {
-      // ignore
-    }
+  if (totalForMonth > 0) {
+    _monthAdherencePercent = (takenForMonth / totalForMonth) * 100.0;
+  } else {
+    _monthAdherencePercent = 0.0;
   }
-
-  void _prevMonth() {
-    setState(() {
-      _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month - 1);
-      _loadDataForMonth(_visibleMonth);
-    });
-  }
-
-  void _nextMonth() {
-    setState(() {
-      _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month + 1);
-      _loadDataForMonth(_visibleMonth);
-    });
-  }
+  setState(() {});
+}
 
   // Enhanced color and style handling for day status
   Map<String, dynamic> _styleForStatus(DayStatus? s, bool isToday) {
@@ -353,7 +217,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
         if (u != null) {
           final prefs = await SharedPreferences.getInstance();
           // helper to decode a stored key (encrypted or plaintext)
-          Future<List<dynamic>> _decode(String? raw) async {
+          Future<List<dynamic>> decode(String? raw) async {
             if (raw == null || raw.isEmpty) return <dynamic>[];
             try {
               final keyStr = ('${u.passphrase}aura_salt_2025').padRight(32).substring(0,32);
@@ -371,8 +235,8 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
           }
 
           // reminders
-          final rawRem = prefs.getString('aura_reminders_${u.username}');
-          final remList = await _decode(rawRem);
+          final rawRem = prefs.getString('aura_reminders_${u['username']}');
+          final remList = await decode(rawRem);
           for (final e in remList) {
             try {
               final m = Map<String, dynamic>.from(e as Map);
@@ -384,7 +248,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                   'medication': m['medication'] ?? '',
                   'dosage': m['dosage'] ?? '',
                   'dateTime': (m['dateTime'] ?? '').toString(),
-                  'takenAt': m['takenAt'] ?? null,
+                  'takenAt': m['takenAt'],
                   'source': 'reminder'
                 });
               }
@@ -392,8 +256,8 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
           }
 
           // history
-          final rawHist = prefs.getString('aura_reminder_history_${u.username}');
-          final histList = await _decode(rawHist);
+          final rawHist = prefs.getString('aura_reminder_history_${u['username']}');
+          final histList = await decode(rawHist);
           for (final h in histList) {
             try {
               final hm = Map<String, dynamic>.from(h as Map);
@@ -468,7 +332,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                         children: [
                           Text('Daily Summary', style: TextStyle(fontWeight: FontWeight.bold)),
                           const SizedBox(height: 8),
-                          Text('✅ Taken: $takenCount (${takenOnTime} on time)'),
+                          Text('✅ Taken: $takenCount ($takenOnTime on time)'),
                           Text('❌ Missed: $missedCount'),
                           if (items.isNotEmpty) Text(
                             '📊 Adherence: ${(takenCount / items.length * 100).toStringAsFixed(1)}%',
@@ -524,7 +388,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                         isThreeLine: true,
                       ),
                     );
-                  }).toList(),
+                  }),
                 ],
               )
             ),
@@ -627,7 +491,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Row(children: [IconButton(onPressed: _prevMonth, icon: const Icon(Icons.chevron_left)), Text(DateFormat.yMMMM().format(_visibleMonth), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), IconButton(onPressed: _nextMonth, icon: const Icon(Icons.chevron_right))]),
+        Row(children: [IconButton(onPressed: _prevMonth, icon: const Icon(Icons.chevron_left)), Text(DateFormat.yMMM().format(_visibleMonth), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), IconButton(onPressed: _nextMonth, icon: const Icon(Icons.chevron_right))]),
         Row(children: [
           Container(padding: const EdgeInsets.symmetric(horizontal:12, vertical:6), decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(12)), child: const Text('Taken')),
           const SizedBox(width:8),
@@ -808,8 +672,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
               ),
             ],
           ),
-        ),
-      );
+        );
     }
 
     // Mood values for last 7 days (0..10)
@@ -905,8 +768,8 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
         final key = encryptpkg.Key.fromUtf8(keyStr);
         final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
 
-        final storageKey = 'aura_reminders_${u.username}';
-        final historyKey = 'aura_reminder_history_${u.username}';
+        final storageKey = 'aura_reminders_${u['username']}';
+        final historyKey = 'aura_reminder_history_${u['username']}';
         
         // Clear existing data
         List<dynamic> existing = [];

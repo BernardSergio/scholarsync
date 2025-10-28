@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ResourcesPage extends StatefulWidget {
   const ResourcesPage({super.key});
@@ -9,7 +10,8 @@ class ResourcesPage extends StatefulWidget {
   State<ResourcesPage> createState() => _ResourcesPageState();
 }
 
-class _ResourcesPageState extends State<ResourcesPage> with SingleTickerProviderStateMixin {
+class _ResourcesPageState extends State<ResourcesPage>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final TextEditingController _searchCtrl = TextEditingController();
 
@@ -23,7 +25,6 @@ class _ResourcesPageState extends State<ResourcesPage> with SingleTickerProvider
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    // ensure UI updates (search bar visibility) when user changes tabs
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) setState(() {});
     });
@@ -32,7 +33,6 @@ class _ResourcesPageState extends State<ResourcesPage> with SingleTickerProvider
   }
 
   Future<void> _loadData() async {
-    // Try to load saved data; otherwise populate with built-in offline samples
     try {
       final prefs = await SharedPreferences.getInstance();
       final clinicsRaw = prefs.getString('resources_clinics');
@@ -40,24 +40,26 @@ class _ResourcesPageState extends State<ResourcesPage> with SingleTickerProvider
       final emergencyRaw = prefs.getString('resources_emergency');
 
       if (clinicsRaw != null && clinicsRaw.isNotEmpty) {
-        _clinics = List<Map<String,dynamic>>.from(jsonDecode(clinicsRaw) as List<dynamic>);
+        _clinics =
+            List<Map<String, dynamic>>.from(jsonDecode(clinicsRaw) as List);
       } else {
         _clinics = _defaultClinics();
       }
 
       if (articlesRaw != null && articlesRaw.isNotEmpty) {
-        _articles = List<Map<String,dynamic>>.from(jsonDecode(articlesRaw) as List<dynamic>);
+        _articles =
+            List<Map<String, dynamic>>.from(jsonDecode(articlesRaw) as List);
       } else {
         _articles = _defaultArticles();
       }
 
       if (emergencyRaw != null && emergencyRaw.isNotEmpty) {
-        _emergency = List<Map<String,String>>.from(jsonDecode(emergencyRaw) as List<dynamic>);
+        _emergency =
+            List<Map<String, String>>.from(jsonDecode(emergencyRaw) as List);
       } else {
         _emergency = _defaultEmergency();
       }
     } catch (_) {
-      // fallback to defaults
       _clinics = _defaultClinics();
       _articles = _defaultArticles();
       _emergency = _defaultEmergency();
@@ -67,8 +69,6 @@ class _ResourcesPageState extends State<ResourcesPage> with SingleTickerProvider
       _filteredClinics = List.of(_clinics);
     });
   }
-
-  // no compute helper needed for small data
 
   void _onSearch() {
     final q = _searchCtrl.text.trim().toLowerCase();
@@ -80,66 +80,132 @@ class _ResourcesPageState extends State<ResourcesPage> with SingleTickerProvider
       _filteredClinics = _clinics.where((c) {
         final name = (c['name'] as String).toLowerCase();
         final addr = (c['address'] as String).toLowerCase();
-        final services = ((c['services'] as List<dynamic>).join(' ')).toLowerCase();
+        final services =
+            ((c['services'] as List<dynamic>).join(' ')).toLowerCase();
         return name.contains(q) || addr.contains(q) || services.contains(q);
       }).toList();
     });
   }
 
-  List<Map<String,dynamic>> _defaultClinics() {
+  // ---- REAL DATA ----
+
+List<Map<String, dynamic>> _defaultClinics() {
+  return [
+    {
+      'name': 'National Center for Mental Health (NCMH)',
+      'address': 'Nueve de Pebrero St., Mandaluyong City, Metro Manila',
+      'phone': '(02) 8531-9001',
+      'hours': '24 Hours',
+      'services': ['Psychiatric Care', 'Emergency Services', 'Counseling'],
+      'maps': 'https://www.google.com/maps/dir//H2JV%2BJMR,+Nueve+de+Febrero,+Mandaluyong+City,+Kalakhang+Maynila/@14.5815966,120.9617484,12z/data=!4m8!4m7!1m0!1m5!1m1!1s0x3397c836239b4299:0x927b4ad146f31d2d!2m2!1d121.0441502!2d14.581611?entry=ttu&g_ep=EgoyMDI1MTAyMi4wIKXMDSoASAFQAw%3D%3D'
+    },
+    {
+      'name': 'Philippine Mental Health Association (PMHA)',
+      'address': '18 East Avenue, Diliman, Quezon City',
+      'phone': '(02) 8921-4958',
+      'hours': 'Mon–Fri 8AM–5PM',
+      'services': ['Counseling', 'Education', 'Therapy'],
+      'maps': 'https://www.google.com/maps?gs_lcrp=EgZjaHJvbWUyBggAEEUYOTIGCAEQLhhA0gEHNjc5ajBqNKgCALACAA&um=1&ie=UTF-8&fb=1&gl=ph&sa=X&geocode=KT00ddilt5czMaCXOvpWY58V&daddr=18+East+Ave,+Diliman,+Quezon+City,+1100+Metro+Manila'
+    },
+    {
+      'name': 'The Medical City Behavioral Medicine Center',
+      'address': 'Ortigas Ave, Pasig City, Metro Manila',
+      'phone': '(02) 8988-1000',
+      'hours': 'Mon–Sat 8AM–6PM',
+      'services': [
+        'Therapy',
+        'Psychiatry',
+        'Behavioral Health Programs'
+      ],
+      'maps': 'https://www.google.com/maps?s=web&lqi=CitUaGUgTWVkaWNhbCBDaXR5IEJlaGF2aW9yYWwgTWVkaWNpbmUgQ2VudGVyIgOIAQFIho_NveetgIAIWkMQABABEAIQAxAEEAUYARgCGAMYBBgFIit0aGUgbWVkaWNhbCBjaXR5IGJlaGF2aW9yYWwgbWVkaWNpbmUgY2VudGVykgEGZG9jdG9ymgEkQ2hkRFNVaE5NRzluUzBWSlEwRm5TVU5xZVdRMlJXMUJSUkFC-gEECAAQNg&vet=12ahUKEwjlvNXslMSQAxX5YvUHHaL7LiwQ1YkKegQIJRAB..i&cs=1&um=1&ie=UTF-8&fb=1&gl=ph&sa=X&geocode=KbnsulOCyZczMRdSUO4dOd5C&daddr=H3R9%2B3HH,+Medical+City+Dr,+Pasig,+Metro+Manila'
+    },
+  ];
+}
+
+  List<Map<String, dynamic>> _defaultArticles() {
     return [
       {
-        'name': 'Wellness Mental Health Center',
-        'address': '123 Main Street, Downtown',
-        'phone': '+1 555 123 4567',
-        'hours': 'Mon–Fri 8AM–6PM',
-        'services': ['Therapy','Psychiatry','Group Sessions']
+        'title': 'Breaking the Stigma: Mental Health in the Philippines',
+        'summary':
+            'Exploring how Filipinos are reshaping the conversation around mental health.',
+        'content': '',
+        'link':
+            'https://healspacelipa.com/mental-health-stigma-in-the-philippines-breaking-the-silence/'
       },
       {
-        'name': 'MindCare Pharmacy',
-        'address': '456 Oak Avenue, Midtown',
-        'phone': '+1 555 987 6543',
-        'hours': 'Mon–Sat 9AM–9PM',
-        'services': ['Pharmacy','Medication Counseling','24/7 Emergency']
+        'title': 'Coping with Anxiety During Difficult Times',
+        'summary':
+            'Tips for managing anxiety and stress amid uncertainty and change.',
+        'content': '',
+        'link':
+            'https://health.mountsinai.org/blog/how-to-deal-with-stress-and-anxiety-during-challenging-times/'
       },
       {
-        'name': 'Community Mental Health Services',
-        'address': '789 Pine Road, West Side',
-        'phone': '+1 555 456 7890',
-        'hours': 'Mon–Fri 7AM–7PM',
-        'services': ['Crisis Support','Counseling','Peer Support']
-      }
+        'title': 'Your Mental Health Matters: How to Seek Help in the Philippines',
+        'summary':
+            'A guide to finding professional support and understanding mental health services in the Philippines.',
+        'content': '',
+        'link':
+            'https://in-touch.org/'
+      },
     ];
   }
 
-  List<Map<String,dynamic>> _defaultArticles() {
+  List<Map<String, String>> _defaultEmergency() {
     return [
-      {'title':'Understanding Antidepressants','summary':'Learn about different types of antidepressants and what to expect.','content':'Full article content about antidepressants.','link':''},
-      {'title':'Mindfulness Techniques for Anxiety','summary':'Practical mindfulness exercises to manage anxiety.','content':'Full article content about mindfulness.','link':''},
-      {'title':'Sleep Hygiene and Mental Health','summary':'How sleep affects mental health and tips for better sleep habits.','content':'Full article content about sleep hygiene.','link':''},
+      {
+        'name': 'NCMH Crisis Hotline (Luzon-wide)',
+        'number': '1553',
+        'desc': '24/7 mental health support and counseling services'
+      },
+      {
+        'name': 'DOH Mental Health Crisis Hotlines',
+        'number': '(02) 1553 / 0966-351-4518 / 0908-639-2672',
+        'desc': 'Department of Health crisis hotlines nationwide'
+      },
+      {
+        'name': 'Hopeline PH',
+        'number': '(02) 8804-4673 / 0917-558-4673',
+        'desc': '24/7 emotional support for people in distress'
+      },
     ];
   }
 
-  List<Map<String,String>> _defaultEmergency() {
-    return [
-      {'name':'National Suicide Prevention Lifeline','number':'988','desc':'24/7 crisis support for people in suicidal crisis or emotional distress'},
-      {'name':'Crisis Text Line','number':'741741','desc':'Text HOME to 741741 for 24/7 support'},
-      {'name':'NAMI Helpline','number':'1-800-950-NAMI (6264)','desc':'Information and support for mental health conditions'},
-    ];
+  // ---- ACTIONS ----
+
+  void _callNumber(String number) async {
+    final Uri uri = Uri(scheme: 'tel', path: number);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Cannot call $number')));
+    }
   }
 
-  void _callNumber(String number) {
-    // Placeholder: in real app use url_launcher to dial
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Calling $number (placeholder)')));
+  void _openDirections(String mapsUrl) async {
+    final Uri uri = Uri.parse(mapsUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open Google Maps.')),
+      );
+    }
   }
 
-  void _openDirections(String address) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Open directions to $address (placeholder)')));
+  void _showArticle(Map<String, dynamic> article) async {
+    final Uri uri = Uri.parse(article['link']);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open article link.')),
+      );
+    }
   }
 
-  void _showArticle(Map<String,dynamic> article) {
-    showDialog(context: context, builder: (c) => AlertDialog(title: Text(article['title'] as String), content: SingleChildScrollView(child: Text(article['content'] as String)), actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Close'))]));
-  }
+  // ---- UI ----
 
   @override
   void dispose() {
@@ -151,19 +217,37 @@ class _ResourcesPageState extends State<ResourcesPage> with SingleTickerProvider
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Secure Resources'), backgroundColor: Colors.white, foregroundColor: Colors.teal, elevation: 1, bottom: PreferredSize(preferredSize: const Size.fromHeight(56), child: Padding(padding: const EdgeInsets.symmetric(horizontal:16, vertical:8), child: _buildTabs()))),
+      appBar: AppBar(
+        title: const Text('Secure Resources'),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.teal,
+        elevation: 1,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(56),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: _buildTabs(),
+          ),
+        ),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(children: [
-          // Search bar only for locations
-          if (_tabController.index == 0) _buildSearchBar(),
-          const SizedBox(height:8),
-          Expanded(child: TabBarView(controller: _tabController, children: [
-            _buildLocationsTab(),
-            _buildArticlesTab(),
-            _buildEmergencyTab(),
-          ])),
-        ]),
+        child: Column(
+          children: [
+            if (_tabController.index == 0) _buildSearchBar(),
+            const SizedBox(height: 8),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildLocationsTab(),
+                  _buildArticlesTab(),
+                  _buildEmergencyTab(),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -171,19 +255,26 @@ class _ResourcesPageState extends State<ResourcesPage> with SingleTickerProvider
   Widget _buildTabs() {
     return TabBar(
       controller: _tabController,
-      // use the same look & feel as the Dashboard TabBar
       indicatorColor: Colors.teal,
       labelColor: Colors.teal,
       unselectedLabelColor: Colors.grey,
       labelStyle: const TextStyle(fontWeight: FontWeight.w600),
-      tabs: const [Tab(text: 'Locations'), Tab(text: 'Articles'), Tab(text: 'Emergency')],
+      tabs: const [
+        Tab(text: 'Locations'),
+        Tab(text: 'Articles'),
+        Tab(text: 'Emergency')
+      ],
     );
   }
 
   Widget _buildSearchBar() {
     return TextField(
       controller: _searchCtrl,
-      decoration: InputDecoration(hintText: 'Search by name, service, or location', prefixIcon: const Icon(Icons.search), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+      decoration: InputDecoration(
+        hintText: 'Search by name, service, or location',
+        prefixIcon: const Icon(Icons.search),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      ),
     );
   }
 
@@ -194,21 +285,57 @@ class _ResourcesPageState extends State<ResourcesPage> with SingleTickerProvider
       itemBuilder: (context, i) {
         final c = _filteredClinics[i];
         return Card(
-          margin: const EdgeInsets.symmetric(vertical:8),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           child: Padding(
             padding: const EdgeInsets.all(12.0),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(c['name'], style: const TextStyle(fontWeight: FontWeight.bold)), Text(c['hours'], style: const TextStyle(color: Colors.grey, fontSize:12))]),
-              const SizedBox(height:6),
-              Text(c['address']),
-              const SizedBox(height:6),
-              Row(children: [Icon(Icons.phone, size:14, color: Colors.grey), const SizedBox(width:6), Text(c['phone'])]),
-              const SizedBox(height:8),
-              Wrap(spacing:8, children: (c['services'] as List<dynamic>).map((s) => Chip(label: Text('$s', style: const TextStyle(fontSize:12)), backgroundColor: Colors.grey[100])).toList()),
-              const SizedBox(height:8),
-              Row(children: [ElevatedButton.icon(onPressed: () => _openDirections(c['address']), icon: const Icon(Icons.directions), label: const Text('Directions'), style: ElevatedButton.styleFrom(backgroundColor: Colors.teal)), const SizedBox(width:8), OutlinedButton.icon(onPressed: () => _callNumber(c['phone']), icon: const Icon(Icons.call), label: const Text('Call'))])
-            ]),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(c['name'],
+                          style: const TextStyle(fontWeight: FontWeight.bold)),
+                      Text(c['hours'],
+                          style:
+                              const TextStyle(color: Colors.grey, fontSize: 12))
+                    ]),
+                const SizedBox(height: 6),
+                Text(c['address']),
+                const SizedBox(height: 6),
+                Row(children: [
+                  const Icon(Icons.phone, size: 14, color: Colors.grey),
+                  const SizedBox(width: 6),
+                  Text(c['phone'])
+                ]),
+                const SizedBox(height: 8),
+                Wrap(
+                    spacing: 8,
+                    children: (c['services'] as List<dynamic>)
+                        .map((s) => Chip(
+                              label: Text('$s',
+                                  style: const TextStyle(fontSize: 12)),
+                              backgroundColor: Colors.grey[100],
+                            ))
+                        .toList()),
+                const SizedBox(height: 8),
+                Row(children: [
+                  ElevatedButton.icon(
+                      onPressed: () => _openDirections(c['maps']),
+                      icon: const Icon(Icons.directions),
+                      label: const Text('Directions'),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.teal)),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                      onPressed: () => _callNumber(c['phone']),
+                      icon: const Icon(Icons.call),
+                      label: const Text('Call'))
+                ])
+              ],
+            ),
           ),
         );
       },
@@ -220,11 +347,18 @@ class _ResourcesPageState extends State<ResourcesPage> with SingleTickerProvider
       itemCount: _articles.length,
       itemBuilder: (context, i) {
         final a = _articles[i];
-        return Card(margin: const EdgeInsets.symmetric(vertical:8), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), child: ListTile(
-          title: Text(a['title']),
-          subtitle: Text(a['summary']),
-          trailing: IconButton(icon: const Icon(Icons.open_in_new), onPressed: () => _showArticle(a)),
-        ));
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          child: ListTile(
+            title: Text(a['title']),
+            subtitle: Text(a['summary']),
+            trailing: IconButton(
+                icon: const Icon(Icons.open_in_new),
+                onPressed: () => _showArticle(a)),
+          ),
+        );
       },
     );
   }
@@ -234,14 +368,35 @@ class _ResourcesPageState extends State<ResourcesPage> with SingleTickerProvider
       itemCount: _emergency.length,
       itemBuilder: (context, i) {
         final e = _emergency[i];
-        return Card(margin: const EdgeInsets.symmetric(vertical:8), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), child: Padding(padding: const EdgeInsets.all(12), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(e['name']!, style: const TextStyle(fontWeight: FontWeight.bold)), const SizedBox(height:6), Text(e['desc']!)])),
-          ElevatedButton.icon(onPressed: () => _callNumber(e['number']!), icon: const Icon(Icons.call), label: const Text('Call Now'), style: ElevatedButton.styleFrom(backgroundColor: Colors.red))
-        ])));
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        Text(e['name']!,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 6),
+                        Text(e['desc']!)
+                      ])),
+                  ElevatedButton.icon(
+                      onPressed: () => _callNumber(e['number']!),
+                      icon: const Icon(Icons.call),
+                      label: const Text('Call Now'),
+                      style:
+                          ElevatedButton.styleFrom(backgroundColor: Colors.red))
+                ]),
+          ),
+        );
       },
     );
   }
 }
-
-// helpers
-
