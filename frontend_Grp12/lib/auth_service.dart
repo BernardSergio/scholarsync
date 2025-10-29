@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'config.dart';
+
 
 class AuthService {
-  final String baseUrl = 'http://localhost:5000/api/auth'; 
+final String authUrl = '$baseUrl/auth';
 
   Map<String, dynamic>? _currentUser;
   Map<String, dynamic>? get currentUser => _currentUser;

@@ -12,6 +12,8 @@ import 'reminders.dart' as reminders_lib;
 import 'package:flutter_application_1/appointments.dart' as appointments_lib;
 import 'package:encrypt/encrypt.dart' as encryptpkg;
 import 'resources.dart';
+import 'config.dart';
+
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -1770,7 +1772,7 @@ Future<bool> logMoodToBackend({
     }
 
     final token = user['token'] as String;
-    final url = Uri.parse('http://localhost:5000/api/moods');
+    final url = Uri.parse('$baseUrl/moods');
 
     // Convert mood to lowercase to match backend enum
     final moodLower = mood.toLowerCase();
@@ -1840,7 +1842,7 @@ Future<bool> logMedicationToBackend({
     }
 
     final token = user['token'] as String;
-    final url = Uri.parse('http://localhost:5000/api/medications');
+    final url = Uri.parse('$baseUrl/medications');
 
     final response = await http.post(
       url,
@@ -1907,7 +1909,7 @@ Future<bool> saveNoteToBackend({
     }
 
     final token = user['token'] as String;
-    final url = Uri.parse('http://localhost:5000/api/notes');
+    final url = Uri.parse('$baseUrl/notes');
 
     final response = await http.post(
       url,
@@ -1976,7 +1978,7 @@ Future<bool> saveAppointmentToBackend({
     }
 
     final token = user['token'] as String;
-    final url = Uri.parse('http://localhost:5000/api/appointments');
+    final url = Uri.parse('$baseUrl/appointments');
 
     // 🔥 FIX: Convert Flutter type to backend format
     String backendType = type;

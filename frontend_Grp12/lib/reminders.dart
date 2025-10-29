@@ -1,4 +1,4 @@
-// reminders.dart - FIXED VERSION
+// reminders.dart 
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:encrypt/encrypt.dart' as encryptpkg;
 import 'auth_service.dart';
 import 'appointments.dart';
+import 'config.dart';
 
 final _fixedIV = encryptpkg.IV.fromUtf8('aura_fixed_iv_2025'.padRight(16).substring(0, 16));
 final ValueNotifier<int> remindersNotifier = ValueNotifier<int>(0);
@@ -227,9 +228,9 @@ Future<void> _loadReminders() async {
     }
 
     try {
-      debugPrint('  📡 GET http://localhost:5000/api/reminders');
+      debugPrint('  📡 GET $baseUrl/reminders');
       final response = await http.get(
-        Uri.parse('http://localhost:5000/api/reminders'),
+        Uri.parse('$baseUrl/reminders'),
         headers: {
           'Authorization': 'Bearer ${u['token']}',
           'Content-Type': 'application/json',
@@ -335,13 +336,13 @@ Future<void> _loadReminders() async {
       debugPrint('Medication: ${reminder.medication}');
       debugPrint('Dosage: ${reminder.dosage}');
       debugPrint('Time: $timeStr');
-      debugPrint('URL: http://localhost:5000/api/reminders');
+      debugPrint('URL: $baseUrl/reminders');
       debugPrint('Token (first 30 chars): ${u['token'].toString().substring(0, 30)}...');
       
       debugPrint('🌐 Sending HTTP POST request...');
       
       final response = await http.post(
-        Uri.parse('http://localhost:5000/api/reminders'),
+          Uri.parse('$baseUrl/reminders'),
         headers: {
           'Authorization': 'Bearer ${u['token']}',
           'Content-Type': 'application/json',
@@ -387,7 +388,7 @@ Future<void> _loadReminders() async {
 
     try {
       await http.put(
-        Uri.parse('http://localhost:5000/api/reminders/$backendId/toggle'),
+        Uri.parse('$baseUrl/reminders/$backendId/toggle'),
         headers: {
           'Authorization': 'Bearer ${u['token']}',
           'Content-Type': 'application/json',
@@ -404,7 +405,7 @@ Future<void> _loadReminders() async {
 
     try {
       await http.delete(
-        Uri.parse('http://localhost:5000/api/reminders/$backendId'),
+          Uri.parse('$baseUrl/reminders/$backendId'),
         headers: {
           'Authorization': 'Bearer ${u['token']}',
           'Content-Type': 'application/json',
@@ -1480,7 +1481,7 @@ Future<bool?> showAddReminderDialog(BuildContext context) async {
                 final timeStr = DateFormat.jm().format(finalDt);
                 
                 final response = await http.post(
-                  Uri.parse('http://localhost:5000/api/reminders'),
+                  Uri.parse('$baseUrl/reminders'),
                   headers: {
                     'Authorization': 'Bearer $token',
                     'Content-Type': 'application/json',

@@ -5,6 +5,8 @@ import 'dart:math' as math;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'config.dart';
+
 
 class Appointment {
   String title;
@@ -221,7 +223,7 @@ Future<bool?> showScheduleAppointmentDialog(BuildContext context, {Appointment? 
                           final user = await AuthService().getCurrentUser();
                           if (user != null && user['token'] != null) {
                             final token = user['token'] as String;
-                            final url = Uri.parse('http://localhost:5000/api/appointments');
+                            final url = Uri.parse('$baseUrl/appointments');
                             
                             // Convert type to backend format
                             String backendType = apptType;
@@ -537,7 +539,7 @@ void _showScheduleDialog({Appointment? existing, int? index}) async {
                           final user = await AuthService().getCurrentUser();
                           if (user != null && user['token'] != null) {
                             final token = user['token'] as String;
-                            final url = Uri.parse('http://localhost:5000/api/appointments');
+                            final url = Uri.parse('$baseUrl/appointments');
                             
                             // Convert type to backend format
                             String backendType = apptType;
