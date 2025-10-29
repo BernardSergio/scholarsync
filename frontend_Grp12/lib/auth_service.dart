@@ -3,82 +3,87 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'config.dart';
 
-
 class AuthService {
-final String authUrl = '$baseUrl/auth';
+  final String authUrl = '$baseUrl/auth';  // ✅ Fixed: added /auth
 
   Map<String, dynamic>? _currentUser;
   Map<String, dynamic>? get currentUser => _currentUser;
 
   // --- REGISTER USER ---
-Future<bool> registerUser(String username, String email, String password, String number) async {
-  try {
-    final url = Uri.parse('$baseUrl/register');
-    final response = await http.post(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'username': username,
-        'email': email,
-        'password': password,
-        'number': number,
-      }),
-    );
+  Future<bool> registerUser(String username, String email, String password, String number) async {
+    try {
+      final url = Uri.parse('$baseUrl/auth/register');  // ✅ Fixed: was just /register
+      print('🔵 Registering to: $url');
+      print('🔵 Data: username=$username, email=$email');
+      
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'username': username,
+          'email': email,
+          'password': password,
+          'number': number,
+        }),
+      ).timeout(const Duration(seconds: 10));  // ✅ Added timeout
 
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      print('Registration success: ${response.body}');
-      return true;
-    } else {
-      print('Registration failed: ${response.body}');
+      print('🔵 Response status: ${response.statusCode}');
+      print('🔵 Response body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        print('✅ Registration success: ${response.body}');
+        return true;
+      } else {
+        print('❌ Registration failed: ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      print('❌ Error registering user: $e');
       return false;
     }
-  } catch (e) {
-    print('Error registering user: $e');
-    return false;
   }
-}
-
 
   // --- LOGIN USER ---
-Future<bool> loginUser(String usernameOrEmail, String password) async {
-  try {
-    final url = Uri.parse('$baseUrl/login');
-    final response = await http.post(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'username': usernameOrEmail, 
-        'password': password,
-      }),
-    );
+  Future<bool> loginUser(String usernameOrEmail, String password) async {
+    try {
+      final url = Uri.parse('$baseUrl/auth/login');  // ✅ Fixed: added /auth
+      print('🔵 Logging in to: $url');
+      
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'username': usernameOrEmail, 
+          'password': password,
+        }),
+      ).timeout(const Duration(seconds: 10));
 
-    print('🔹 Login response: ${response.body}'); 
+      print('🔹 Login response: ${response.body}'); 
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
 
-      if (data['token'] != null) {
-        _currentUser = {
-          'email': data['user']['email'],
-          'username': data['user']['username'],
-          'token': data['token'],
-        };
+        if (data['token'] != null) {
+          _currentUser = {
+            'email': data['user']['email'],
+            'username': data['user']['username'],
+            'token': data['token'],
+          };
 
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('current_user', jsonEncode(_currentUser));
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('current_user', jsonEncode(_currentUser));
 
-        return true;
+          return true;
+        }
       }
+
+      print('❌ Login failed: ${response.body}');
+      return false;
+    } catch (e) {
+      print('❌ Error logging in: $e');
+      return false;
     }
-
-    print('Login failed: ${response.body}');
-    return false;
-  } catch (e) {
-    print('Error logging in: $e');
-    return false;
   }
-}
-
 
   Future<Map<String, dynamic>?> getCurrentUser() async {
     if (_currentUser != null) return _currentUser;
@@ -105,54 +110,55 @@ Future<bool> loginUser(String usernameOrEmail, String password) async {
       print('Error during logout: $e');
     }
   }
+
   // --- CHANGE PASSWORD ---
-Future<Map<String, dynamic>> changePassword(
-  String currentPassword,
-  String newPassword,
-) async {
-  try {
-    final user = await getCurrentUser();
-    if (user == null || user['token'] == null) {
+  Future<Map<String, dynamic>> changePassword(
+    String currentPassword,
+    String newPassword,
+  ) async {
+    try {
+      final user = await getCurrentUser();
+      if (user == null || user['token'] == null) {
+        return {
+          'success': false,
+          'message': 'No user logged in'
+        };
+      }
+
+      final url = Uri.parse('$baseUrl/auth/change-password');  // ✅ Fixed
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${user['token']}',
+        },
+        body: jsonEncode({
+          'currentPassword': currentPassword,
+          'newPassword': newPassword,
+        }),
+      );
+
+      print('🔹 Change password response: ${response.body}');
+
+      final data = jsonDecode(response.body);
+      
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Password changed successfully'
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to change password'
+        };
+      }
+    } catch (e) {
+      print('❌ Error changing password: $e');
       return {
         'success': false,
-        'message': 'No user logged in'
+        'message': 'Network error: $e'
       };
     }
-
-    final url = Uri.parse('$baseUrl/change-password');
-    final response = await http.post(
-      url,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${user['token']}',
-      },
-      body: jsonEncode({
-        'currentPassword': currentPassword,
-        'newPassword': newPassword,
-      }),
-    );
-
-    print('🔹 Change password response: ${response.body}');
-
-    final data = jsonDecode(response.body);
-    
-    if (response.statusCode == 200) {
-      return {
-        'success': true,
-        'message': data['message'] ?? 'Password changed successfully'
-      };
-    } else {
-      return {
-        'success': false,
-        'message': data['message'] ?? 'Failed to change password'
-      };
-    }
-  } catch (e) {
-    print('❌ Error changing password: $e');
-    return {
-      'success': false,
-      'message': 'Network error: $e'
-    };
   }
-}
 }
