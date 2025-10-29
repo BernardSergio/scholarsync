@@ -44,46 +44,49 @@ class AuthService {
   }
 
   // --- LOGIN USER ---
-  Future<bool> loginUser(String usernameOrEmail, String password) async {
-    try {
-      final url = Uri.parse('$baseUrl/auth/login');  // ✅ Fixed: added /auth
-      print('🔵 Logging in to: $url');
-      
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'username': usernameOrEmail, 
-          'password': password,
-        }),
-      ).timeout(const Duration(seconds: 10));
+Future<bool> loginUser(String usernameOrEmail, String password) async {
+  try {
+    final url = Uri.parse('$baseUrl/auth/login');
+    print('🔵 Logging in to: $url');
 
-      print('🔹 Login response: ${response.body}'); 
+    // Send BOTH username and email fields
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'username': usernameOrEmail,
+        'email': usernameOrEmail,   // <-- send email too
+        'password': password,
+      }),
+    ).timeout(const Duration(seconds: 10));
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+    print('🔹 Login response: ${response.body}');
 
-        if (data['token'] != null) {
-          _currentUser = {
-            'email': data['user']['email'],
-            'username': data['user']['username'],
-            'token': data['token'],
-          };
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
 
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('current_user', jsonEncode(_currentUser));
+      if (data['token'] != null) {
+        _currentUser = {
+          'email': data['user']['email'],
+          'username': data['user']['username'],
+          'token': data['token'],
+        };
 
-          return true;
-        }
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('current_user', jsonEncode(_currentUser));
+
+        return true;
       }
-
-      print('❌ Login failed: ${response.body}');
-      return false;
-    } catch (e) {
-      print('❌ Error logging in: $e');
-      return false;
     }
+
+    print('❌ Login failed: ${response.body}');
+    return false;
+  } catch (e) {
+    print('❌ Error logging in: $e');
+    return false;
   }
+}
+
 
   Future<Map<String, dynamic>?> getCurrentUser() async {
     if (_currentUser != null) return _currentUser;
