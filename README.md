@@ -1,4 +1,5 @@
 Project Description
+
 AURA is a secure, mobile application designed to be a private partner for individuals managing HIV treatment and prevention. In a context where social stigma can be a significant barrier to consistent care, AURA provides a confidential, stigma-free digital environment. The app operates as a standalone unit on the user's device, ensuring that all sensitive data—including medication logs, health journals, and appointments—is encrypted and never leaves the device without explicit user consent. By combining discreet, intelligent reminders with a robust privacy-first architecture, AURA empowers users to manage their health with confidence and peace of mind.
 
 Key Features
