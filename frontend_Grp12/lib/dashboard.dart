@@ -705,11 +705,10 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         const Expanded(child: Text('Medication Adherence Trends', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
-        // seed demo data button for quick visual verification
         OutlinedButton.icon(
           onPressed: _seedDemoData,
           icon: const Icon(Icons.bug_report, size: 16),
-          label: const Text('Seed demo data'),
+          label: const Text('Seed data'),
         ),
       ]),
       const SizedBox(height: 12),
@@ -725,13 +724,11 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     ]);
   }
 
-  /// Seed demo reminders, appointments and mood journal entries so charts show data.
   Future<void> _seedDemoData() async {
     final prefs = await SharedPreferences.getInstance();
     final u = AuthService().currentUser;
     final now = DateTime.now();
 
-    // Seed appointments (global storage)
     try {
       final rawAppt = prefs.getString('aura_appointments') ?? '[]';
       final apptList = (json.decode(rawAppt) as List<dynamic>?)?.toList() ?? [];
@@ -881,17 +878,14 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       } catch (_) {}
     }
 
-    // reload data and refresh UI (best-effort). Also inject visible demo state so charts update immediately.
     await _loadDataForMonth(_visibleMonth);
 
-    // Inject demo state to ensure charts show even if loaders miss encrypted reminders when not signed in.
     try {
       final today = DateTime.now();
       // clear existing caches for visible month
       _dayStatus.clear();
       _dayDetails.clear();
 
-      // seed day details from demo reminders we added above
       final demoTodayKey = DateFormat('yyyy-MM-dd').format(DateTime(today.year, today.month, today.day));
       final demoYesterdayKey = DateFormat('yyyy-MM-dd').format(DateTime(today.year, today.month, today.day - 1));
 
@@ -907,7 +901,6 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       ];
       _dayStatus[demoYesterdayKey] = DayStatus.taken;
 
-  // compute a simple month adherence: mark demo days
   int totalForMonth = 0;
   int takenForMonth = 0;
       final daysInMonth = DateTime(_visibleMonth.year, _visibleMonth.month + 1, 0).day;
@@ -945,7 +938,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       setState(() {});
     } catch (_) {}
 
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Demo data seeded — check Trends and Reminders')));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Data seeded — check Trends and Reminders')));
   }
 
     @override

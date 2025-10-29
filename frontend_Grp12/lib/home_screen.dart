@@ -21,9 +21,13 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _medicationsKey = GlobalKey();
+  
   final List<Map<String, dynamic>> _todayActivity = [];
   final List<Appointment> _todaysAppointments = [];
   final List<Map<String, dynamic>> _todaysMedReminders = [];
+  final List<Map<String, dynamic>> _todaysLoggedMeds = []; // ADD THIS LINE
   int _selectedIndex = 0;
   String? _aiInsight;
   bool _showAIInsight = true;
@@ -58,12 +62,14 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  @override
-  void dispose() {
+@override
+void dispose() {
+  _scrollController.dispose();
   try { reminders_lib.remindersNotifier.removeListener(_onRemindersChanged); } catch (_) {}
   try { appointments_lib.appointmentsNotifier.removeListener(_onAppointmentsChanged); } catch (_) {}
-    super.dispose();
-  }
+  super.dispose();
+}
+
 
   void _onRemindersChanged() {
     // reload reminders into today's activity when storage changes
@@ -595,24 +601,35 @@ Widget _buildQuickActions() {
             ),
           ),
           const SizedBox(width: 8),
-          Expanded(
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.medication, color: Colors.white),
-              label: const Text('Log Meds', style: TextStyle(color: Colors.white)),
-              onPressed: () async {
-                final saved = await _showLogMedicationDialog();
-                if (saved == true) {
-                  await _loadTodaysReminders();
-                  await _loadTodaysAppointments();
-                  setState(() {});
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blueAccent, 
-                padding: const EdgeInsets.symmetric(vertical: 12)
-              ),
-            ),
-          ),
+Expanded(
+  child: ElevatedButton.icon(
+    icon: const Icon(Icons.medication, color: Colors.white),
+    label: const Text('Log Meds', style: TextStyle(color: Colors.white)),
+    onPressed: () async {
+      // First, scroll to Today's Medications section
+      if (_medicationsKey.currentContext != null) {
+        await Scrollable.ensureVisible(
+          _medicationsKey.currentContext!,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+          alignment: 0.0, // Scroll to top of the widget
+        );
+      }
+      
+      // Then show the medication dialog
+      final saved = await _showLogMedicationDialog();
+      if (saved == true) {
+        await _loadTodaysReminders();
+        await _loadTodaysAppointments();
+        setState(() {});
+      }
+    },
+    style: ElevatedButton.styleFrom(
+      backgroundColor: Colors.blueAccent, 
+      padding: const EdgeInsets.symmetric(vertical: 12)
+    ),
+  ),
+),
           const SizedBox(width: 8),
           Expanded(
             child: ElevatedButton.icon(
@@ -1041,36 +1058,156 @@ Widget _buildQuickActions() {
     ],
   );
 }
-  Widget _buildTodaysMedicationsCard() {
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [const Icon(Icons.medication, color: Colors.teal), const SizedBox(width:8), const Text("Today's Medications", style: TextStyle(fontWeight: FontWeight.bold))]),
-          const SizedBox(height:12),
-          if (_todaysMedReminders.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical:16), child: Text('No medication reminders for today')) else ...[
-            Column(children: _todaysMedReminders.map((m) {
-              final time = DateFormat.jm().format(DateTime.parse(m['dateTime'] as String));
-              final repeat = (m['repeatDaily'] == true);
-              final dt = DateTime.parse(m['dateTime'] as String);
-              final invalid = !repeat && dt.isBefore(DateTime.now());
-              return ListTile(
-                contentPadding: const EdgeInsets.symmetric(vertical: 6, horizontal: 0),
-                leading: CircleAvatar(backgroundColor: Colors.green.shade50, child: const Icon(Icons.medication, color: Colors.green)),
-                title: Text('${m['medication']} • ${m['dosage']}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(time), if (repeat) const SizedBox(height:4), if (repeat) Row(children: [const Icon(Icons.repeat, size:12, color: Colors.purple), const SizedBox(width:6), const Text('Daily', style: TextStyle(fontSize:11, color: Colors.purple))])]),
-                tileColor: invalid ? Colors.red.shade50 : null,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: invalid ? Colors.red.shade300 : Colors.transparent)),
-                onTap: () => setState(() { _selectedIndex = 4; }),
-              );
-            }).toList())
-          ]
-        ]),
+Widget _buildTodaysMedicationsCard() {
+  // Combine reminders and logged medications
+  final allMeds = <Map<String, dynamic>>[];
+  allMeds.addAll(_todaysMedReminders);
+  allMeds.addAll(_todaysLoggedMeds);
+  
+  // Sort by time (most recent first)
+  allMeds.sort((a, b) {
+    final aTime = DateTime.parse(a['dateTime'] as String);
+    final bTime = DateTime.parse(b['dateTime'] as String);
+    return bTime.compareTo(aTime);
+  });
+
+  return Card(
+    elevation: 1,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    child: Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.medication, color: Colors.teal),
+              const SizedBox(width: 8),
+              const Text(
+                "Today's Medications",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (allMeds.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: Text(
+                  'No medications logged or scheduled for today',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+            )
+          else
+            Column(
+              children: allMeds.map((m) {
+                final time = DateFormat.jm().format(DateTime.parse(m['dateTime'] as String));
+                final isLogged = m['isLogged'] == true;
+                final isReminder = !isLogged;
+                final repeat = (m['repeatDaily'] == true);
+                final dt = DateTime.parse(m['dateTime'] as String);
+                final isPast = dt.isBefore(DateTime.now());
+                
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: isLogged 
+                        ? Colors.green.shade50 
+                        : (isPast && !repeat ? Colors.red.shade50 : null),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isLogged 
+                          ? Colors.green.shade300 
+                          : (isPast && !repeat ? Colors.red.shade300 : Colors.grey.shade200),
+                    ),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+                    leading: CircleAvatar(
+                      backgroundColor: isLogged 
+                          ? Colors.green.shade100 
+                          : Colors.teal.shade50,
+                      child: Icon(
+                        isLogged ? Icons.check_circle : Icons.medication,
+                        color: isLogged ? Colors.green : Colors.teal,
+                      ),
+                    ),
+                    title: Text(
+                      '${m['medication']} • ${m['dosage']}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              isLogged ? Icons.check : Icons.access_time,
+                              size: 14,
+                              color: Colors.grey.shade600,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              isLogged ? 'Taken at $time' : 'Scheduled at $time',
+                              style: TextStyle(
+                                color: Colors.grey.shade700,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (isReminder && repeat) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(Icons.repeat, size: 12, color: Colors.purple.shade400),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Daily',
+                                style: TextStyle(fontSize: 11, color: Colors.purple.shade400),
+                              ),
+                            ],
+                          ),
+                        ],
+                        if (m['notes'] != null && (m['notes'] as String).isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            m['notes'] as String,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                              fontStyle: FontStyle.italic,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ],
+                    ),
+                    trailing: isLogged
+                        ? Chip(
+                            label: const Text(
+                              'Logged',
+                              style: TextStyle(fontSize: 10, color: Colors.white),
+                            ),
+                            backgroundColor: Colors.green,
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                          )
+                        : null,
+                    onTap: isReminder
+                        ? () => setState(() { _selectedIndex = 4; })
+                        : null,
+                  ),
+                );
+              }).toList(),
+            ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
 Future<bool?> _showLogMoodDialog() async {
   final feelings = ['Happy', 'Sad', 'Angry', 'Anxious', 'Calm', 'Excited', 'Tired', 'Motivated'];
@@ -1554,8 +1691,15 @@ Future<bool?> _showLogMedicationDialog() async {
                     'color': Colors.green,
                     'source': 'medication',
                   });
+                  _todaysLoggedMeds.insert(0, {
+                    'medication': medName,
+                    'dosage': dosage,
+                    'dateTime': selectedDateTime.toIso8601String(),
+                    'notes': notes,
+                    'isLogged': true, 
                 });
-              }
+              });
+            }
             }
           },
           child: const Text('Save'),
@@ -1567,41 +1711,45 @@ Future<bool?> _showLogMedicationDialog() async {
   return ok;
 }
 
-  Widget _buildBodyForIndex(int idx) {
-    switch (idx) {
-      case 0:
-        return SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (_showWelcome) _buildFirstRunOverviewCard() else (_todayActivity.isEmpty ? _buildEmptyActivityPlaceholder() : _buildTodaysActivityCard()),
-              const SizedBox(height: 12),
-              _buildAIInsightsCard(),
-              const SizedBox(height: 12),
-              _buildQuickActions(),
-              const SizedBox(height: 12),
-              _buildTodaysMedicationsCard(),
-              const SizedBox(height: 12),
-            ],
-          ),
-        );
-      case 1:
-        return const DashboardPage();
-      case 2:
-        return FutureBuilder(
-          future: Future.value(null),
-          builder: (c, s) => const AppointmentsPage(),
-        );
-      case 3:
-        return const journal_lib.JournalPage();
-      case 4:
-        return const reminders_lib.RemindersPage();
-      case 5:
-        return const ResourcesPage();
-      default:
-        return const SizedBox.shrink();
-    }
+Widget _buildBodyForIndex(int idx) {
+  switch (idx) {
+    case 0:
+      return SingleChildScrollView(
+        controller: _scrollController, // Add this line
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_showWelcome) _buildFirstRunOverviewCard() else (_todayActivity.isEmpty ? _buildEmptyActivityPlaceholder() : _buildTodaysActivityCard()),
+            const SizedBox(height: 12),
+            _buildAIInsightsCard(),
+            const SizedBox(height: 12),
+            _buildQuickActions(),
+            const SizedBox(height: 12),
+            Container(
+              key: _medicationsKey, // Add this key
+              child: _buildTodaysMedicationsCard(),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      );
+    case 1:
+      return const DashboardPage();
+    case 2:
+      return FutureBuilder(
+        future: Future.value(null),
+        builder: (c, s) => const AppointmentsPage(),
+      );
+    case 3:
+      return const journal_lib.JournalPage();
+    case 4:
+      return const reminders_lib.RemindersPage();
+    case 5:
+      return const ResourcesPage();
+    default:
+      return const SizedBox.shrink();
   }
+}
 
 Future<bool> logMoodToBackend({
   required String mood,

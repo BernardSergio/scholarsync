@@ -1,4 +1,6 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class TwoFactorScreen extends StatefulWidget {
   final bool preselectSms;
@@ -9,167 +11,160 @@ class TwoFactorScreen extends StatefulWidget {
 }
 
 class _TwoFactorScreenState extends State<TwoFactorScreen> {
-  bool _useAuthenticator = true;
-  bool _isLoading = false;
-
+  bool _isSmsSelected = false;
   final TextEditingController _phoneController = TextEditingController();
-
-  final Color _auraPrimaryColor = const Color.fromARGB(255, 0, 146, 110);
-  final Color _scaffoldBackgroundColor = const Color(0xFFF3F7FF);
-  final Color _greyTextColor = const Color(0xFF757575);
-  final Color _textFieldBorderColor = const Color(0xFFE0E0E0);
-  final Color _textFieldFillColor = const Color(0xFFFCFCFF);
-  final Color _auraHeaderColor = const Color(0xFF3DAA80);
-
-  @override
-  void dispose() {
-    _phoneController.dispose();
-    super.dispose();
-  }
+  String? _message; // To show “link sent” message
+  String _randomQrData = '';
 
   @override
   void initState() {
     super.initState();
-    // If caller asked to preselect SMS, set accordingly
-    try { _useAuthenticator = !(widget.preselectSms); } catch (_) {}
+    _isSmsSelected = widget.preselectSms;
+    _generateRandomQr();
   }
 
-  Future<void> _enable() async {
-    setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 1));
-    setState(() => _isLoading = false);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Two-factor authentication enabled')));
-    Navigator.of(context).pop();
+  void _generateRandomQr() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final rnd = Random();
+    _randomQrData =
+        List.generate(12, (_) => chars[rnd.nextInt(chars.length)]).join();
+  }
+
+  void _onSendLink() {
+    final number = _phoneController.text.trim();
+    if (number.isEmpty) {
+      setState(() => _message = '⚠️ Please enter your phone number.');
+      return;
+    }
+
+    setState(() {
+      _message = '✅ A link has been sent to $number';
+    });
+  }
+
+  void _onEnable2FA() {
+    Navigator.pop(context, true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('✅ Two-Factor Authentication Enabled')),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _scaffoldBackgroundColor,
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 500),
-            child: Card(
-              margin: EdgeInsets.zero,
-              elevation: 8,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(32.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'AURA',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontFamily: 'Roboto',
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: _auraHeaderColor,
-                      ),
+      appBar: AppBar(
+        title: const Text('Two-Factor Authentication'),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.teal,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Choose 2FA Method',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () =>
+                        setState(() => _isSmsSelected = true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _isSmsSelected
+                          ? Colors.teal
+                          : Colors.grey[300],
+                      foregroundColor:
+                          _isSmsSelected ? Colors.white : Colors.black,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Enable Two-Factor Authentication',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: _greyTextColor, fontSize: 16),
+                    child: const Text('SMS'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () =>
+                        setState(() => _isSmsSelected = false),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: !_isSmsSelected
+                          ? Colors.teal
+                          : Colors.grey[300],
+                      foregroundColor:
+                          !_isSmsSelected ? Colors.white : Colors.black,
                     ),
-                    const SizedBox(height: 20),
-
-                    // Option toggle
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ChoiceChip(
-                            label: const Text('Authenticator App'),
-                            selected: _useAuthenticator,
-                            onSelected: (v) => setState(() => _useAuthenticator = true),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: ChoiceChip(
-                            label: const Text('SMS / Phone'),
-                            selected: !_useAuthenticator,
-                            onSelected: (v) => setState(() => _useAuthenticator = false),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-
-                    if (_useAuthenticator) ...[
-                      // QR placeholder and secret
-                      Container(
-                        height: 180,
-                        decoration: BoxDecoration(
-                          color: _textFieldFillColor,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: _textFieldBorderColor),
-                        ),
-                        child: const Center(child: Text('QR Code placeholder')),
-                      ),
-                      const SizedBox(height: 12),
-                      const Text('Scan the QR code with your authenticator app and enter the generated code when prompted.'),
-                    ] else ...[
-                      // SMS
-                      Text(
-                        'Enter your phone number to receive verification codes via SMS.',
-                        style: TextStyle(color: _greyTextColor),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _phoneController,
-                        keyboardType: TextInputType.phone,
-                        decoration: InputDecoration(
-                          hintText: 'e.g. +1 555 123 4567',
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: _textFieldBorderColor)),
-                          filled: true,
-                          fillColor: _textFieldFillColor,
-                        ),
-                      ),
-                    ],
-
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: _auraPrimaryColor,
-                              side: BorderSide(color: _auraPrimaryColor),
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                            child: const Text('Back'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: _isLoading ? null : _enable,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _auraPrimaryColor,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              elevation: 0,
-                            ),
-                            child: _isLoading ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white))) : const Text('Enable', style: TextStyle(color: Colors.white)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                    child: const Text('QR Code'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            if (_isSmsSelected) ...[
+              const Text(
+                'Enter your phone number to receive a link:',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: InputDecoration(
+                  hintText: '+63XXXXXXXXXX',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 ),
               ),
-            ),
-          ),
+              const SizedBox(height: 10),
+              ElevatedButton(
+                onPressed: _onSendLink,
+                child: const Text('Send Verification Link'),
+              ),
+              if (_message != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _message!,
+                  style: const TextStyle(
+                      color: Colors.teal, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ] else ...[
+              const Text(
+                'Scan this QR code using your authenticator app:',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              Center(
+                child: QrImageView(
+                  data: _randomQrData,
+                  size: 200,
+                  backgroundColor: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Center(
+                child: Text(
+                  'Code: $_randomQrData',
+                  style: const TextStyle(fontSize: 14, color: Colors.grey),
+                ),
+              ),
+            ],
+            const Spacer(),
+            Center(
+              child: ElevatedButton(
+                onPressed: _onEnable2FA,
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.teal,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 40, vertical: 14)),
+                child: const Text('Enable 2FA'),
+              ),
+            )
+          ],
         ),
       ),
     );

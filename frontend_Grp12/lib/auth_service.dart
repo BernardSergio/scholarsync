@@ -103,4 +103,54 @@ Future<bool> loginUser(String usernameOrEmail, String password) async {
       print('Error during logout: $e');
     }
   }
+  // --- CHANGE PASSWORD ---
+Future<Map<String, dynamic>> changePassword(
+  String currentPassword,
+  String newPassword,
+) async {
+  try {
+    final user = await getCurrentUser();
+    if (user == null || user['token'] == null) {
+      return {
+        'success': false,
+        'message': 'No user logged in'
+      };
+    }
+
+    final url = Uri.parse('$baseUrl/change-password');
+    final response = await http.post(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${user['token']}',
+      },
+      body: jsonEncode({
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
+      }),
+    );
+
+    print('🔹 Change password response: ${response.body}');
+
+    final data = jsonDecode(response.body);
+    
+    if (response.statusCode == 200) {
+      return {
+        'success': true,
+        'message': data['message'] ?? 'Password changed successfully'
+      };
+    } else {
+      return {
+        'success': false,
+        'message': data['message'] ?? 'Failed to change password'
+      };
+    }
+  } catch (e) {
+    print('❌ Error changing password: $e');
+    return {
+      'success': false,
+      'message': 'Network error: $e'
+    };
+  }
+}
 }

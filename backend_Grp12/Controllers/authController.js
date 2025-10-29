@@ -172,7 +172,53 @@ export const forgotPassword = async (req, res) => {
       });
   }
 };
+// ---------------------- Change Password ----------------------
+export const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user.id; // From JWT token via middleware
 
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Current password and new password are required."
+      });
+    }
+
+    // Find user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found."
+      });
+    }
+
+    // Verify current password
+    const isMatch = await user.matchPassword(currentPassword);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "Current password is incorrect."
+      });
+    }
+
+    // Update to new password (pre-save hook will hash it)
+    user.password = newPassword;
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Password changed successfully."
+    });
+  } catch (err) {
+    console.error("❌ Change Password Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while changing password."
+    });
+  }
+};
 // ---------------------- Reset Password ----------------------
 export const resetPassword = async (req, res) => {
   try {
