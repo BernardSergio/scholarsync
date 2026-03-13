@@ -7,7 +7,7 @@ import 'auth_service.dart';
 import 'reminders.dart';
 
 // Fixed IV for consistent encryption/decryption across the app
-final _fixedIV = encryptpkg.IV.fromUtf8('aura_fixed_iv_2025'.padRight(16).substring(0, 16));
+final _fixedIV = encryptpkg.IV.fromUtf8('ss_fixed_iv_2025__'.padRight(16).substring(0, 16));
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -109,7 +109,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     final u = AuthService().currentUser;
     if (u == null) return null;
     final pass = u['passphrase'] ?? '';
-    final k = ('${pass}aura_salt_2025').padRight(32).substring(0,32);
+final k = ('${pass}ss_salt_2025____').padRight(32).substring(0,32);
     return encryptpkg.Key.fromUtf8(k);
   }
 
@@ -137,7 +137,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
   }
   int totalForMonth = 0;
   int takenForMonth = 0;
-  final rawRem = prefs.getString('aura_reminders_${u['username']}'); // Fixed here
+final rawRem = prefs.getString('scholarsync_reminders_${u['username']}');
   final remList = await decodeList(rawRem);
   for (final e in remList) {
     try {
@@ -237,7 +237,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
             if (raw == null || raw.isEmpty) return <dynamic>[];
             try {
               final passphrase = u['passphrase'] ?? '';
-              final keyStr = ('${passphrase}aura_salt_2025').padRight(32).substring(0,32);
+              final keyStr = ('${passphrase}ss_salt_2025____').padRight(32).substring(0,32);
               final key = encryptpkg.Key.fromUtf8(keyStr);
               final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
               final dec = encrypter.decrypt64(raw, iv: _fixedIV);
@@ -252,7 +252,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
           }
 
           // reminders
-          final rawRem = prefs.getString('aura_reminders_${u['username']}');
+          final rawRem = prefs.getString('scholarsync_reminders_${u['username']}');
           final remList = await decode(rawRem);
           for (final e in remList) {
             try {
@@ -273,7 +273,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
           }
 
           // history
-          final rawHist = prefs.getString('aura_reminder_history_${u['username']}');
+          final rawHist = prefs.getString('scholarsync_reminder_history_${u['username']}');
           final histList = await decode(rawHist);
           for (final h in histList) {
             try {
@@ -327,7 +327,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       builder: (c) => AlertDialog(
         title: Row(
           children: [
-            Icon(Icons.calendar_today, color: Colors.teal),
+          Icon(Icons.calendar_today, color: Color(0xFFFFC107)),
             const SizedBox(width: 8),
             Text(DateFormat.yMMMMd().format(date)),
           ]
@@ -341,7 +341,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                 children: [
                   // Daily Summary Card
                   if (items.isNotEmpty) Card(
-                    color: Colors.teal.shade50,
+                  color: const Color(0xFFFFF8E1),
                     child: Padding(
                       padding: const EdgeInsets.all(12),
                       child: Column(
@@ -517,7 +517,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
           Container(padding: const EdgeInsets.symmetric(horizontal:12, vertical:6), decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(12)), child: const Text('No data')),
           const SizedBox(width:12),
           // month adherence percent
-          Container(padding: const EdgeInsets.symmetric(horizontal:12, vertical:6), decoration: BoxDecoration(color: Colors.teal.shade50, borderRadius: BorderRadius.circular(12)), child: Text(_monthAdherencePercent > 0 ? '${_monthAdherencePercent.toStringAsFixed(0)}% adherence' : 'No adherence data'))
+        Container(padding: const EdgeInsets.symmetric(horizontal:12, vertical:6), decoration: BoxDecoration(color: const Color(0xFFFFF8E1), borderRadius: BorderRadius.circular(12)), child: Text(_monthAdherencePercent > 0 ? '${_monthAdherencePercent.toStringAsFixed(0)}% adherence' : 'No adherence data'))
         ]),
       ]),
       const SizedBox(height: 8),
@@ -635,7 +635,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            colors: [Colors.teal.shade300, Colors.teal.shade500],
+colors: [Color(0xFFFFD54F), Color(0xFFFFC107)],
                           ),
                           borderRadius: BorderRadius.circular(6),
                           boxShadow: [
@@ -704,7 +704,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
-        const Expanded(child: Text('Medication Adherence Trends', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+const Expanded(child: Text('Assignment Completion Trends', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
         OutlinedButton.icon(
           onPressed: _seedDemoData,
           icon: const Icon(Icons.bug_report, size: 16),
@@ -713,12 +713,12 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       ]),
       const SizedBox(height: 12),
       if (!hasAnyWeekData) ...[
-        SizedBox(height: 120, child: Center(child: Text('No medication adherence data for ${DateFormat.yMMMM().format(_visibleMonth)}', style: TextStyle(color: Colors.grey[700])))),
+        SizedBox(height: 120, child: Center(child: Text('No assignment completion data for ${DateFormat.yMMMM().format(_visibleMonth)}', style: TextStyle(color: Colors.grey[700])))),
       ] else ...[
         SizedBox(height: 200, child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, crossAxisAlignment: CrossAxisAlignment.stretch, children: bars)),
       ],
       const SizedBox(height: 16),
-      const Text('Mood (last 7 days)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+const Text('Study Score (last 7 days)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
       const SizedBox(height: 8),
       SizedBox(height: 180, child: Padding(padding: const EdgeInsets.symmetric(horizontal:8.0), child: _SimpleSparkline(values: moodValues, labels: last7.map((d)=>DateFormat('E').format(d)).toList()))),
     ]);
@@ -730,31 +730,31 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     final now = DateTime.now();
 
     try {
-      final rawAppt = prefs.getString('aura_appointments') ?? '[]';
+final rawAppt = prefs.getString('scholarsync_sessions') ?? '[]';
       final apptList = (json.decode(rawAppt) as List<dynamic>?)?.toList() ?? [];
       // add two appointments: one today, one later this month
       apptList.insert(0, {
-        'title': 'Check-in with Dr. Smith',
+'title': 'Study Session with Prof. Smith',
         'dateTime': DateTime(now.year, now.month, now.day, 10, 30).toIso8601String(),
-        'provider': 'Dr. Smith',
+'provider': 'Prof. Smith',
         'location': 'Clinic A',
-        'notes': 'Regular follow-up',
+'notes': 'Exam review',
         'type': 'In Person'
       });
       apptList.insert(0, {
-        'title': 'Therapy Session',
+'title': 'Online Tutorial Session',
         'dateTime': DateTime(now.year, now.month, (now.day + 3) > 28 ? 28 : now.day + 3, 14, 0).toIso8601String(),
-        'provider': 'Therapist',
+'provider': 'Tutor',
         'location': 'Telehealth',
         'notes': '',
         'type': 'Video Call'
       });
-      await prefs.setString('aura_appointments', json.encode(apptList));
+await prefs.setString('scholarsync_sessions', json.encode(apptList));
     } catch (_) {}
 
     // Seed journal mood entries (plain storage) - create entries for entire month
     try {
-      final rawJournal = prefs.getString('aura_journal_entries') ?? '[]';
+final rawJournal = prefs.getString('scholarsync_notes') ?? '[]';
       final journalList = (json.decode(rawJournal) as List<dynamic>?)?.toList() ?? [];
       // Create one mood entry per day from Oct 1 to today, values cycle 5..9
       for (int day = 1; day <= now.day; day++) {
@@ -769,19 +769,19 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
           'tags': ['seed']
         });
       }
-      await prefs.setString('aura_journal_entries', json.encode(journalList));
+await prefs.setString('scholarsync_notes', json.encode(journalList));
     } catch (_) {}
 
     // Seed reminders (encrypted per-user). If no user, skip reminders seeding.
     if (u != null) {
       try {
         final passphrase = u['passphrase'] ?? '';
-        final keyStr = ('${passphrase}aura_salt_2025').padRight(32).substring(0,32);
+final keyStr = ('${passphrase}ss_salt_2025____').padRight(32).substring(0,32);
         final key = encryptpkg.Key.fromUtf8(keyStr);
         final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
 
-        final storageKey = 'aura_reminders_${u['username']}';
-        final historyKey = 'aura_reminder_history_${u['username']}';
+final storageKey = 'scholarsync_reminders_${u['username']}';
+final historyKey = 'scholarsync_reminder_history_${u['username']}';
         
         // Clear existing data
         List<dynamic> existing = [];
@@ -946,7 +946,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       return Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          TabBar(controller: _tabController, tabs: const [Tab(text: 'Calendar'), Tab(text: 'Trends')], labelColor: Colors.teal, unselectedLabelColor: Colors.grey),
+          TabBar(controller: _tabController, tabs: const [Tab(text: 'Calendar'), Tab(text: 'Trends')], labelColor: const Color(0xFFFFC107), unselectedLabelColor: Colors.grey),
           const SizedBox(height: 12),
           Expanded(child: TabBarView(controller: _tabController, children: [SingleChildScrollView(child: _buildCalendar()), SingleChildScrollView(child: Padding(padding: const EdgeInsets.all(8.0), child: _buildTrends()))])),
         ]),
@@ -986,11 +986,12 @@ class _SparklinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.purpleAccent
+..color = const Color(0xFFFFC107)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.5;
 
-    final dotPaint = Paint()..color = Colors.purpleAccent;
+final dotPaint = Paint()..color = const Color(0xFFFFC107);
+
 
     if (values.isEmpty) return;
     final double w = size.width;

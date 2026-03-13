@@ -9,7 +9,7 @@ import 'auth_service.dart';
 import 'appointments.dart';
 import 'config.dart';
 
-final _fixedIV = encryptpkg.IV.fromUtf8('aura_fixed_iv_2025'.padRight(16).substring(0, 16));
+final _fixedIV = encryptpkg.IV.fromUtf8('ss_fixed_iv_2025__'.padRight(16).substring(0, 16));
 final ValueNotifier<int> remindersNotifier = ValueNotifier<int>(0);
 
 enum ReminderStatus { pending, taken, missed }
@@ -136,8 +136,8 @@ class _RemindersPageState extends State<RemindersPage> {
   final Set<String> _fading = {};
   bool _isLoading = false;
 
-  String _storageKeyFor(String username) => 'aura_reminders_$username';
-  String _historyKeyFor(String username) => 'aura_reminder_history_$username';
+String _storageKeyFor(String username) => 'scholarsync_reminders_$username';
+String _historyKeyFor(String username) => 'scholarsync_reminder_history_$username';
 
   @override
   void initState() {
@@ -163,7 +163,7 @@ class _RemindersPageState extends State<RemindersPage> {
     final u = AuthService().currentUser;
     if (u == null) return null;
     final passphrase = u['passphrase'] ?? '';
-    final k = ('${passphrase}aura_salt_2025').padRight(32).substring(0, 32);
+    final k = ('${passphrase}ss_salt_2025____').padRight(32).substring(0, 32);
     return encryptpkg.Key.fromUtf8(k);
   }
 
@@ -526,7 +526,7 @@ Future<void> _loadReminders() async {
                       child: Icon(
                         notify ? Icons.notifications_active : Icons.notifications_off,
                         key: ValueKey<bool>(notify),
-                        color: notify ? Colors.teal : Colors.grey,
+                      color: notify ? const Color(0xFFFFC107) : Colors.grey,
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -762,7 +762,7 @@ Future<void> _loadReminders() async {
 
   Future<List<Appointment>> _loadTodaysAppointments() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString('aura_appointments');
+    final raw = prefs.getString('scholarsync_sessions');
     final List<Appointment> out = [];
     if (raw == null || raw.isEmpty) return out;
     
@@ -874,10 +874,10 @@ Future<void> _loadReminders() async {
                       children: [
                         const Row(
                           children: [
-                            Icon(Icons.medication, color: Colors.teal),
+                            const Icon(Icons.assignment, color: Color(0xFFFFC107)),
                             SizedBox(width: 8),
                             Text(
-                              "Today's Medication Schedule",
+                                "Today's Assignment Schedule",
                               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                             ),
                           ],
@@ -894,7 +894,7 @@ Future<void> _loadReminders() async {
                           const Padding(
                             padding: EdgeInsets.symmetric(vertical: 24),
                             child: Center(
-                              child: Text('No medication reminders for today'),
+                              child: Text('No assignment reminders for today'),
                             ),
                           )
                         else
@@ -986,7 +986,7 @@ Future<void> _loadReminders() async {
                               icon: const Icon(Icons.add),
                               label: const Text('Add Reminder'),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.teal,
+                                  backgroundColor: const Color(0xFFFFC107),
                                 foregroundColor: Colors.white,
                               ),
                             ),
@@ -1009,7 +1009,7 @@ Future<void> _loadReminders() async {
                       children: [
                         const Row(
                           children: [
-                            Icon(Icons.history, color: Colors.teal),
+                            const Icon(Icons.history, color: Color(0xFFFFC107)),
                             SizedBox(width: 8),
                             Text(
                               'Reminder History',
@@ -1114,10 +1114,10 @@ Future<void> _loadReminders() async {
                       children: [
                         const Row(
                           children: [
-                            Icon(Icons.calendar_today, color: Colors.purple),
+                            const Icon(Icons.calendar_today, color: Color(0xFFFFC107)),
                             SizedBox(width: 8),
                             Text(
-                              'Upcoming Appointments',
+                            'Upcoming Study Sessions',
                               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                             ),
                           ],
@@ -1131,7 +1131,7 @@ Future<void> _loadReminders() async {
                             }
                             final list = snap.data ?? [];
                             if (list.isEmpty) {
-                              return const Text('No appointments scheduled for today');
+                            return const Text('No study sessions scheduled for today');
                             }
                             return Column(
                               children: list.map((a) {
@@ -1220,11 +1220,11 @@ Future<void> _loadReminders() async {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString('aura_reminders_${u['username']}');
+      final raw = prefs.getString('scholarsync_reminders_${u['username']}');
       if (raw == null || raw.isEmpty) return out;
 
       final passphrase = u['passphrase'] ?? 'default_pass';
-      final keyStr = ('${passphrase}aura_salt_2025').padRight(32).substring(0, 32);
+      final keyStr = ('${passphrase}ss_salt_2025____').padRight(32).substring(0, 32);
       final key = encryptpkg.Key.fromUtf8(keyStr);
       final encrypter = encryptpkg.Encrypter(encryptpkg.AES(key));
 
@@ -1298,7 +1298,7 @@ Future<bool?> showAddReminderDialog(BuildContext context) async {
               TextField(
                 controller: medCtrl,
                 decoration: const InputDecoration(
-                  labelText: 'Medication name',
+                    labelText: 'Assignment name',
                   filled: true,
                   fillColor: Color(0xFFF3F6F8),
                   border: OutlineInputBorder(
@@ -1310,7 +1310,7 @@ Future<bool?> showAddReminderDialog(BuildContext context) async {
               TextField(
                 controller: doseCtrl,
                 decoration: const InputDecoration(
-                  labelText: 'Dosage',
+                  labelText: 'Subject / Course',
                   filled: true,
                   fillColor: Color(0xFFF3F6F8),
                   border: OutlineInputBorder(
@@ -1416,7 +1416,7 @@ Future<bool?> showAddReminderDialog(BuildContext context) async {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Please enter medication name and dosage'),
+                content: Text('Please enter assignment name and subject'),
                   ),
                 );
               }

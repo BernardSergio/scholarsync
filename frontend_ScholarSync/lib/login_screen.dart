@@ -16,15 +16,15 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _canSubmit = false;
 
-  // ── ScholarSync Colors ──────────────────────────
-  static const Color _primary           = Color(0xFFFFC107); // Amber
-  static const Color _background        = Color(0xFFF5F5F5);
-  static const Color _surface           = Color(0xFFFFFFFF);
-  static const Color _foreground        = Color(0xFF1A1A1A);
-  static const Color _muted             = Color(0xFFE8E8E8);
-  static const Color _mutedForeground   = Color(0xFF5A5A4D);
-  static const Color _border            = Color(0xFFE0E0E0);
-  // ───────────────────────────────────────────────
+// ── ScholarSync Theme ───────────────────────────
+static const Color _primary         = Color(0xFFFFC107); // Amber - keep
+static const Color _background      = Color(0xFF1A1A1A); // Dark page bg ← CHANGED
+static const Color _surface         = Color(0xFFFFFFFF); // White card ← BACK TO WHITE
+static const Color _foreground      = Color(0xFF1A1A1A); // Dark text on card ← BACK TO DARK
+static const Color _muted           = Color(0xFFE8E8E8); // Light input bg ← BACK TO LIGHT
+static const Color _mutedForeground = Color(0xFF5A5A4D); // Muted text ← BACK TO LIGHT
+static const Color _border          = Color(0xFFE0E0E0); // Light border ← BACK TO LIGHT
+// ───────────────────────────────────────────────
 
   @override
   void initState() {
@@ -49,59 +49,42 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Card(
               margin: EdgeInsets.zero,
               elevation: 8,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               color: _surface,
               child: Padding(
                 padding: const EdgeInsets.all(32.0),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    // Logo / Icon
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: _primary.withOpacity(0.12),
+                        color: _primary.withOpacity(0.15),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(Icons.school, color: _primary, size: 40),
                     ),
                     const SizedBox(height: 16),
-
-                    // App Name
                     const Text(
                       'ScholarSync',
                       style: TextStyle(
                         fontFamily: 'Roboto',
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
-                        color: _foreground,
+                        color: _primary,
                       ),
                     ),
                     const SizedBox(height: 8),
-
-                    // Subtitle
                     const Text(
                       'Welcome back to your wellness companion',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: _mutedForeground, fontSize: 15),
                     ),
                     const SizedBox(height: 32),
-
-                    // Username Field
-                    _buildTextField(
-                      label: 'Username',
-                      hint: 'Enter your username',
-                      controller: _usernameController,
-                    ),
+                    _buildTextField(label: 'Username', hint: 'Enter your username', controller: _usernameController),
                     const SizedBox(height: 20),
-
-                    // Password Field
                     _buildPassphraseField(),
                     const SizedBox(height: 30),
-
-                    // Sign In Button
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
@@ -124,26 +107,22 @@ class _LoginScreenState extends State<LoginScreen> {
                               },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _primary,
-                          foregroundColor: _foreground,
+                          foregroundColor: Color(0xFF1A1A1A),
+                          disabledBackgroundColor: _muted,
+                          disabledForegroundColor: _mutedForeground,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           elevation: 0,
                         ),
                         child: _isLoading
                             ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(_foreground),
-                                ),
+                                height: 20, width: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1A1A1A))),
                               )
                             : const Text('Sign In', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       ),
                     ),
                     const SizedBox(height: 12),
-
-                    // Sign Up Link
                     TextButton(
                       onPressed: () => Navigator.of(context).pushNamed('/signup'),
                       child: Text.rich(
@@ -153,27 +132,17 @@ class _LoginScreenState extends State<LoginScreen> {
                           children: [
                             TextSpan(
                               text: 'Sign up',
-                              style: TextStyle(
-                                color: _primary.withOpacity(0.9),
-                                fontWeight: FontWeight.bold,
-                              ),
+                              style: const TextStyle(color: _primary, fontWeight: FontWeight.bold),
                             ),
                           ],
                         ),
                       ),
                     ),
-
-                    // Forgot Password
                     TextButton(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const ForgotPassphraseScreen()),
-                        );
-                      },
-                      child: const Text(
-                        'Forgot your password?',
-                        style: TextStyle(color: _mutedForeground),
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const ForgotPassphraseScreen()),
                       ),
+                      child: const Text('Forgot your password?', style: TextStyle(color: _mutedForeground)),
                     ),
                   ],
                 ),
@@ -185,11 +154,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildTextField({
-    required String label,
-    required String hint,
-    TextEditingController? controller,
-  }) {
+  Widget _buildTextField({required String label, required String hint, TextEditingController? controller}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -197,6 +162,7 @@ class _LoginScreenState extends State<LoginScreen> {
         const SizedBox(height: 8),
         TextField(
           controller: controller,
+          style: const TextStyle(color: _foreground),
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: const TextStyle(color: _mutedForeground),
@@ -221,6 +187,7 @@ class _LoginScreenState extends State<LoginScreen> {
         TextField(
           controller: _passphraseController,
           obscureText: !_isPassphraseVisible,
+          style: const TextStyle(color: _foreground),
           decoration: InputDecoration(
             hintText: 'Enter your password',
             hintStyle: const TextStyle(color: _mutedForeground),

@@ -13,13 +13,13 @@ extension JournalTypeExt on JournalType {
   String get label {
     switch (this) {
       case JournalType.mood:
-        return 'Mood';
+  return 'Study Session';
       case JournalType.medication:
-        return 'Medication';
+  return 'Assignment';
       case JournalType.sideEffect:
-        return 'Side Effects';
+  return 'Challenge';
       case JournalType.note:
-        return 'Notes';
+  return 'Notes';
     }
   }
 }
@@ -68,7 +68,7 @@ class JournalPage extends StatefulWidget {
 }
 
 class _JournalPageState extends State<JournalPage> {
-  static const _storageKey = 'aura_journal_entries';
+  static const _storageKey = 'scholarsync_notes';
   final List<JournalEntry> _entries = [];
   final Set<JournalType> _filters = JournalType.values.toSet();
 
@@ -127,7 +127,7 @@ Future<void> showNewJournalEntryDialog(BuildContext context) async {
   final res = await showDialog<JournalEntry?>(context: context, builder: (c) => _NewEntryDialog());
   if (res != null) {
     final prefs = await SharedPreferences.getInstance();
-    const key = 'aura_journal_entries';
+    const key = 'scholarsync_notes';
     final raw = prefs.getString(key) ?? '[]';
     try {
       final list = json.decode(raw) as List<dynamic>;
@@ -159,7 +159,7 @@ Future<void> showNewJournalEntryDialog(BuildContext context) async {
     final ok = await showDialog<bool?>(context: context, builder: (c) => AlertDialog(
       title: const Text('Export Entries (encrypted)'),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Text('Enter a passphrase to encrypt your export file. Keep it safe.'),
+        const Text('Enter a passphrase to encrypt your notes export file. Keep it safe.'),
         const SizedBox(height: 12),
         TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'Passphrase')),
       ]),
@@ -180,10 +180,10 @@ Future<void> showNewJournalEntryDialog(BuildContext context) async {
     final encrypted = encrypter.encrypt(plaintext, iv: iv);
 
     final dir = await getApplicationDocumentsDirectory();
-    final file = File('${dir.path}/aura_journal_export_${DateTime.now().toIso8601String()}.enc');
+    final file = File('${dir.path}/scholarsync_notes_export_${DateTime.now().toIso8601String()}.enc');
     await file.writeAsBytes(encrypted.bytes);
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Exported ${_entries.length} entries to ${file.path} (encrypted)')));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Exported ${_entries.length} notes to ${file.path} (encrypted)')));
   }
 
   @override
@@ -204,7 +204,7 @@ Future<void> showNewJournalEntryDialog(BuildContext context) async {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Journal Vault', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const Text('Study Notes', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
               Row(children: [
                 ElevatedButton.icon(onPressed: _exportEncrypted, icon: const Icon(Icons.lock), label: const Text('Export')),
                 const SizedBox(width: 8),
@@ -216,7 +216,7 @@ Future<void> showNewJournalEntryDialog(BuildContext context) async {
           // filters
           Wrap(spacing: 8, children: JournalType.values.map((t) {
             final on = _filters.contains(t);
-            return FilterChip(label: Text(t.label), selected: on, onSelected: (_) => _toggleFilter(t));
+        return FilterChip(label: Text(t.label), selected: on, onSelected: (_) => _toggleFilter(t), selectedColor: const Color(0xFFFFC107).withOpacity(0.3), checkmarkColor: const Color(0xFF1A1A1A));
           }).toList()),
           const SizedBox(height: 12),
           Expanded(
@@ -271,24 +271,24 @@ class _NewEntryDialogState extends State<_NewEntryDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('New Journal Entry'),
+        title: const Text('New Study Note'),
       content: SingleChildScrollView(
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Choose the type of entry you\'d like to create'),
+          const Text('Choose the type of note you\'d like to create'),
           const SizedBox(height: 8),
-          Wrap(spacing: 8, children: JournalType.values.map((t) => ChoiceChip(label: Text(t.label), selected: _type==t, onSelected: (_) => setState(()=>_type=t))).toList()),
+          Wrap(spacing: 8, children: JournalType.values.map((t) => ChoiceChip(label: Text(t.label), selected: _type==t, onSelected: (_) => setState(()=>_type=t), selectedColor: const Color(0xFFFFC107).withOpacity(0.3))).toList()),
           const SizedBox(height: 12),
           const Text('Title (optional)'),
           const SizedBox(height: 6),
           TextField(controller: _title, decoration: const InputDecoration(border: OutlineInputBorder())),
           const SizedBox(height: 12),
-          const Text('Write your entry here...'),
+          const Text('Write your note here...'),
           const SizedBox(height: 6),
           TextField(controller: _body, maxLines: 6, decoration: const InputDecoration(border: OutlineInputBorder())),
           const SizedBox(height: 12),
           const Text('Tags (comma or # separated)'),
           const SizedBox(height: 6),
-          TextField(controller: _tags, decoration: const InputDecoration(hintText: '#anxiety, #progress')),
+          TextField(controller: _tags, decoration: const InputDecoration(hintText: '#calculus, #progress')),
         ]),
       ),
       actions: [

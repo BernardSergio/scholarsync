@@ -92,30 +92,30 @@ class _ResourcesPageState extends State<ResourcesPage>
 List<Map<String, dynamic>> _defaultClinics() {
   return [
     {
-      'name': 'National Center for Mental Health (NCMH)',
-      'address': 'Nueve de Pebrero St., Mandaluyong City, Metro Manila',
-      'phone': '(02) 8531-9001',
-      'hours': '24 Hours',
-      'services': ['Psychiatric Care', 'Emergency Services', 'Counseling'],
+      'name': 'University of the Philippines Diliman University Library',
+      'address': 'Ilustrado St., UP Campus, Diliman, Quezon City',
+      'phone': '(02) 8981-8500',
+      'hours': 'Mon–Fri 8AM–8PM',
+      'services': ['Research Assistance', 'Study Rooms', 'Academic Databases'],
       'maps': 'https://www.google.com/maps/dir//H2JV%2BJMR,+Nueve+de+Febrero,+Mandaluyong+City,+Kalakhang+Maynila/@14.5815966,120.9617484,12z/data=!4m8!4m7!1m0!1m5!1m1!1s0x3397c836239b4299:0x927b4ad146f31d2d!2m2!1d121.0441502!2d14.581611?entry=ttu&g_ep=EgoyMDI1MTAyMi4wIKXMDSoASAFQAw%3D%3D'
     },
     {
-      'name': 'Philippine Mental Health Association (PMHA)',
-      'address': '18 East Avenue, Diliman, Quezon City',
-      'phone': '(02) 8921-4958',
-      'hours': 'Mon–Fri 8AM–5PM',
-      'services': ['Counseling', 'Education', 'Therapy'],
+      'name': 'DLSU Learning Commons',
+      'address': 'Gokongwei Hall, De La Salle University, Manila',
+      'phone': '(02) 8524-4611',
+      'hours': 'Mon–Sat 7AM–9PM',
+      'services': ['Tutoring', 'Study Groups', 'Academic Writing'],
       'maps': 'https://www.google.com/maps?gs_lcrp=EgZjaHJvbWUyBggAEEUYOTIGCAEQLhhA0gEHNjc5ajBqNKgCALACAA&um=1&ie=UTF-8&fb=1&gl=ph&sa=X&geocode=KT00ddilt5czMaCXOvpWY58V&daddr=18+East+Ave,+Diliman,+Quezon+City,+1100+Metro+Manila'
     },
     {
-      'name': 'The Medical City Behavioral Medicine Center',
-      'address': 'Ortigas Ave, Pasig City, Metro Manila',
-      'phone': '(02) 8988-1000',
-      'hours': 'Mon–Sat 8AM–6PM',
+      'name': 'Ateneo de Manila University Rizal Library',
+      'address': 'Katipunan Ave., Loyola Heights, Quezon City',
+      'phone': '(02) 8426-6001',
+      'hours': 'Mon–Fri 7:30AM–9PM',
       'services': [
-        'Therapy',
-        'Psychiatry',
-        'Behavioral Health Programs'
+        'Research Support',
+        'Study Spaces',
+        'Digital Resources'
       ],
       'maps': 'https://www.google.com/maps?s=web&lqi=CitUaGUgTWVkaWNhbCBDaXR5IEJlaGF2aW9yYWwgTWVkaWNpbmUgQ2VudGVyIgOIAQFIho_NveetgIAIWkMQABABEAIQAxAEEAUYARgCGAMYBBgFIit0aGUgbWVkaWNhbCBjaXR5IGJlaGF2aW9yYWwgbWVkaWNpbmUgY2VudGVykgEGZG9jdG9ymgEkQ2hkRFNVaE5NRzluUzBWSlEwRm5TVU5xZVdRMlJXMUJSUkFC-gEECAAQNg&vet=12ahUKEwjlvNXslMSQAxX5YvUHHaL7LiwQ1YkKegQIJRAB..i&cs=1&um=1&ie=UTF-8&fb=1&gl=ph&sa=X&geocode=KbnsulOCyZczMRdSUO4dOd5C&daddr=H3R9%2B3HH,+Medical+City+Dr,+Pasig,+Metro+Manila'
     },
@@ -125,28 +125,28 @@ List<Map<String, dynamic>> _defaultClinics() {
   List<Map<String, dynamic>> _defaultArticles() {
     return [
       {
-        'title': 'Breaking the Stigma: Mental Health in the Philippines',
-        'summary':
-            'Exploring how Filipinos are reshaping the conversation around mental health.',
-        'content': '',
-        'link':
-            'https://healspacelipa.com/mental-health-stigma-in-the-philippines-breaking-the-silence/'
+      'title': 'How to Study Smarter, Not Harder',
+      'summary':
+          'Evidence-based techniques to improve retention, focus, and academic performance.',
+      'content': '',
+      'link':
+          'https://www.coursera.org/articles/study-tips'
       },
       {
-        'title': 'Coping with Anxiety During Difficult Times',
-        'summary':
-            'Tips for managing anxiety and stress amid uncertainty and change.',
-        'content': '',
-        'link':
-            'https://health.mountsinai.org/blog/how-to-deal-with-stress-and-anxiety-during-challenging-times/'
+      'title': 'Beating Procrastination: A Student\'s Guide',
+      'summary':
+          'Practical strategies for managing your time and tackling assignments before deadlines.',
+      'content': '',
+      'link':
+          'https://www.uvm.edu/tss/docs/Overcoming_Procrastination.pdf'
       },
       {
-        'title': 'Your Mental Health Matters: How to Seek Help in the Philippines',
-        'summary':
-            'A guide to finding professional support and understanding mental health services in the Philippines.',
-        'content': '',
-        'link':
-            'https://in-touch.org/'
+      'title': 'The Science of Effective Note-Taking',
+      'summary':
+          'Research-backed methods like the Cornell system to maximize what you retain from lectures.',
+      'content': '',
+      'link':
+          'https://learningcenter.unc.edu/tips-and-tools/taking-notes-while-reading/'
       },
     ];
   }
@@ -154,19 +154,19 @@ List<Map<String, dynamic>> _defaultClinics() {
   List<Map<String, String>> _defaultEmergency() {
     return [
       {
-        'name': 'NCMH Crisis Hotline (Luzon-wide)',
-        'number': '1553',
-        'desc': '24/7 mental health support and counseling services'
+        'name': 'CHED Student Assistance Hotline',
+        'number': '(02) 8441-1177',
+        'desc': 'Commission on Higher Education support for students nationwide'
       },
       {
-        'name': 'DOH Mental Health Crisis Hotlines',
-        'number': '(02) 1553 / 0966-351-4518 / 0908-639-2672',
-        'desc': 'Department of Health crisis hotlines nationwide'
+        'name': 'UP Diliman Office of Student Affairs',
+        'number': '(02) 8981-8500 loc. 3941',
+        'desc': 'Academic and student support services'
       },
       {
-        'name': 'Hopeline PH',
-        'number': '(02) 8804-4673 / 0917-558-4673',
-        'desc': '24/7 emotional support for people in distress'
+        'name': 'DLSU Counseling and Career Center',
+        'number': '(02) 8524-4611 loc. 166',
+        'desc': 'Academic counseling and career guidance for students'
       },
     ];
   }
@@ -218,9 +218,9 @@ List<Map<String, dynamic>> _defaultClinics() {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Secure Resources'),
+        title: const Text('Academic Resources'),
         backgroundColor: Colors.white,
-        foregroundColor: Colors.teal,
+        foregroundColor: const Color(0xFFFFC107),
         elevation: 1,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),
@@ -255,8 +255,8 @@ List<Map<String, dynamic>> _defaultClinics() {
   Widget _buildTabs() {
     return TabBar(
       controller: _tabController,
-      indicatorColor: Colors.teal,
-      labelColor: Colors.teal,
+indicatorColor: const Color(0xFFFFC107),
+labelColor: const Color(0xFFFFC107),
       unselectedLabelColor: Colors.grey,
       labelStyle: const TextStyle(fontWeight: FontWeight.w600),
       tabs: const [
@@ -271,7 +271,7 @@ List<Map<String, dynamic>> _defaultClinics() {
     return TextField(
       controller: _searchCtrl,
       decoration: InputDecoration(
-        hintText: 'Search by name, service, or location',
+      hintText: 'Search by name, service, or campus',
         prefixIcon: const Icon(Icons.search),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
       ),
@@ -327,7 +327,7 @@ List<Map<String, dynamic>> _defaultClinics() {
                       icon: const Icon(Icons.directions),
                       label: const Text('Directions'),
                       style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.teal)),
+                backgroundColor: const Color(0xFFFFC107))),
                   const SizedBox(width: 8),
                   OutlinedButton.icon(
                       onPressed: () => _callNumber(c['phone']),

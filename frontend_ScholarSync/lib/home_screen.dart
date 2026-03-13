@@ -154,28 +154,28 @@ void dispose() {
         
         if (difference > 1.5) {
           // Improving trend
-          insight = "🌟 Your mood has been steadily improving over the past week. Consider noting what's been helping you feel better.";
+          insight = "🌟 Your study sessions have been more consistent over the past week. Consider noting what's been helping you feel better.";
         } else if (difference < -1.5) {
           // Declining trend
-          insight = "💙 Your mood has been lower lately. Remember, it's okay to reach out for support. Consider talking to someone you trust.";
+          insight = "💙 Your study sessions have been less consistent lately. Remember, it's okay to reach out for support. Consider talking to someone you trust.";
         } else if (avgIntensity >= 7) {
           // Stable and positive
-          insight = "✨ You've maintained a positive mood this week! Keep up the activities and routines that make you feel good.";
+          insight = "✨ You've been consistently productive this week! Keep up the great work and momentum.";
         } else if (avgIntensity <= 4) {
           // Stable but low
-          insight = "🌱 Your mood has been challenging. Small steps like going outside, staying hydrated, or talking to a friend can help.";
+          insight = "🌱 Studying has been tough lately. Try the Pomodoro technique — 25 minutes focused, 5 minutes break.";
         } else {
           // Stable and neutral
-          insight = "🔄 Your mood has been relatively stable. Consider trying new activities that bring you joy.";
+          insight = "🔄 Your productivity has been steady. Consider mixing up your study environment for a fresh boost!";
         }
       } else {
         // Not enough data for trend, just give general insight
         if (avgIntensity >= 7) {
-          insight = "😊 You're doing well! Keep tracking your mood to discover patterns that help you thrive.";
+          insight = "😊 You're off to a great start! Keep logging sessions to discover your most productive patterns.";
         } else if (avgIntensity <= 4) {
-          insight = "💚 Thank you for tracking your mood. Remember, seeking support is a sign of strength, not weakness.";
+          insight = "💚 Thanks for tracking your progress. Remember, asking for help is a sign of strength!";
         } else {
-          insight = "📊 Keep logging your mood to unlock personalized insights about your emotional patterns.";
+          insight = "📊 Keep logging your notes to unlock personalized insights about your study patterns.";
         }
       }
 
@@ -187,7 +187,7 @@ void dispose() {
         if (hasConsistentHigh) {
           insight = "🎉 You've had several great days this week! Your consistency shows strong emotional wellness.";
         } else if (hasConsistentLow) {
-          insight = "🤗 Multiple low mood days suggest you might benefit from extra self-care or professional support.";
+          insight = "🤗 It looks like you've had some tough study days. Consider talking to a tutor or study group for support.";
         }
       }
 
@@ -372,8 +372,8 @@ Future<void> _loadTodaysReminders() async {
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Dashboard'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Appointments'),
-          BottomNavigationBarItem(icon: Icon(Icons.book), label: 'Journal'),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Sessions'),
+          BottomNavigationBarItem(icon: Icon(Icons.book), label: 'Notes'),
           BottomNavigationBarItem(icon: Icon(Icons.access_time), label: 'Reminders'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Resources'),
         ],
@@ -481,7 +481,7 @@ Future<void> _loadTodaysReminders() async {
             const SizedBox(height: 12),
             const Text('This looks like your first time here. Let\'s get you set up.'),
             const SizedBox(height: 12),
-            const Text('Start by logging your mood, medication, or a quick note using the buttons below.'),
+              const Text('Start by logging a study session, completing an assignment, or adding a quick note.'),
             const SizedBox(height: 16),
             Row(
               children: [
@@ -590,14 +590,14 @@ Widget _buildQuickActions() {
         children: [
           Expanded(
             child: ElevatedButton.icon(
-              icon: const Icon(Icons.sentiment_satisfied, color: Colors.white),
-              label: const Text('Log Mood', style: TextStyle(color: Colors.white)),
+              icon: const Icon(Icons.menu_book, color: Colors.white),
+              label: const Text('Log Study Session', style: TextStyle(color: Colors.white)),
               onPressed: () async { 
                 final saved = await _showLogMoodDialog(); 
                 if (saved == true) setState(() {}); 
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.pinkAccent, 
+                backgroundColor: Color(0xFFFFC107),
                 padding: const EdgeInsets.symmetric(vertical: 12)
               ),
             ),
@@ -605,8 +605,8 @@ Widget _buildQuickActions() {
           const SizedBox(width: 8),
 Expanded(
   child: ElevatedButton.icon(
-    icon: const Icon(Icons.medication, color: Colors.white),
-    label: const Text('Log Meds', style: TextStyle(color: Colors.white)),
+    icon: const Icon(Icons.assignment_turned_in, color: Colors.white),
+    label: const Text('Complete Assignment', style: TextStyle(color: Colors.white)),
     onPressed: () async {
       // First, scroll to Today's Medications section
       if (_medicationsKey.currentContext != null) {
@@ -627,7 +627,7 @@ Expanded(
       }
     },
     style: ElevatedButton.styleFrom(
-      backgroundColor: Colors.blueAccent, 
+      backgroundColor: Color(0xFF5A5A4D),
       padding: const EdgeInsets.symmetric(vertical: 12)
     ),
   ),
@@ -636,7 +636,7 @@ Expanded(
           Expanded(
             child: ElevatedButton.icon(
               icon: const Icon(Icons.edit, color: Colors.white),
-              label: const Text('Free Note', style: TextStyle(color: Colors.white)),
+              label: const Text('Quick Note', style: TextStyle(color: Colors.white)),
               onPressed: () async {
                 final titleCtrl = TextEditingController();
                 final bodyCtrl = TextEditingController();
@@ -775,7 +775,7 @@ Expanded(
                 );
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purpleAccent, 
+                backgroundColor: Color(0xFF3A3A35),
                 padding: const EdgeInsets.symmetric(vertical: 12)
               ),
             ),
@@ -784,7 +784,7 @@ Expanded(
           Expanded(
             child: ElevatedButton.icon(
               icon: const Icon(Icons.calendar_today, color: Colors.white),
-              label: const Text('Schedule Appointment', style: TextStyle(color: Colors.white)),
+              label: const Text('Schedule Study Session', style: TextStyle(color: Colors.white)),
               onPressed: () async {
                 // Show the dialog to get appointment data
                 final titleCtrl = TextEditingController();
@@ -808,7 +808,7 @@ Expanded(
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Schedule New Appointment', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                            const Text('Schedule New Study Session', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                             const SizedBox(height: 12),
                             StatefulBuilder(
                               builder: (dialogContext, setDialogState) {
@@ -819,7 +819,7 @@ Expanded(
                                       TextField(
                                         controller: titleCtrl, 
                                         decoration: const InputDecoration(
-                                          labelText: 'Appointment Title', 
+                                          labelText: 'Session Title',
                                           filled: true, 
                                           fillColor: Color(0xFFF3F6F8), 
                                           border: OutlineInputBorder(
@@ -892,7 +892,7 @@ Expanded(
                                         controller: TextEditingController(text: provider), 
                                         onChanged: (v) => provider = v, 
                                         decoration: const InputDecoration(
-                                          labelText: 'Healthcare Provider', 
+                                          labelText: 'Professor / Tutor',
                                           filled: true, 
                                           fillColor: Color(0xFFF3F6F8), 
                                           border: OutlineInputBorder(
@@ -997,7 +997,7 @@ Expanded(
                             children: [
                               CircularProgressIndicator(),
                               SizedBox(height: 16),
-                              Text('Saving appointment...'),
+                            Text('Saving study session...'),
                             ],
                           ),
                         ),
@@ -1050,7 +1050,7 @@ Expanded(
                 }
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.teal, 
+                backgroundColor: Color(0xFF1A1A1A),
                 padding: const EdgeInsets.symmetric(vertical: 12)
               ),
             ),
@@ -1083,10 +1083,10 @@ Widget _buildTodaysMedicationsCard() {
         children: [
           Row(
             children: [
-              const Icon(Icons.medication, color: Colors.teal),
+              const Icon(Icons.assignment, color: Color(0xFFFFC107)),
               const SizedBox(width: 8),
               const Text(
-                "Today's Medications",
+                "Today's Assignments",
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
             ],
@@ -1097,7 +1097,7 @@ Widget _buildTodaysMedicationsCard() {
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Center(
                 child: Text(
-                  'No medications logged or scheduled for today',
+                  'No assignments logged or scheduled for today',
                   style: TextStyle(color: Colors.grey),
                 ),
               ),
@@ -1152,7 +1152,7 @@ Widget _buildTodaysMedicationsCard() {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              isLogged ? 'Taken at $time' : 'Scheduled at $time',
+                              isLogged ? 'Completed at $time' : 'Due at $time',
                               style: TextStyle(
                                 color: Colors.grey.shade700,
                                 fontSize: 13,
@@ -1229,7 +1229,7 @@ Future<bool?> _showLogMoodDialog() async {
     context: context,
     barrierDismissible: false, // Prevent accidental dismissal
     builder: (c) => AlertDialog(
-      title: const Text('Log Mood'),
+      title: const Text('Log Study Session'),
       content: StatefulBuilder(
         builder: (ctx, setDialogState) => SingleChildScrollView(
           child: Column(
@@ -1372,7 +1372,7 @@ Future<bool?> _showLogMoodDialog() async {
                       children: [
                         CircularProgressIndicator(),
                         SizedBox(height: 16),
-                        Text('Saving mood...'),
+                      Text('Saving study session...'),
                       ],
                     ),
                   ),
@@ -1467,7 +1467,7 @@ Future<bool?> _showLogMedicationDialog() async {
     context: context,
     barrierDismissible: false,
     builder: (c) => AlertDialog(
-      title: const Text('Log Medication'),
+      title: const Text('Complete Assignment'),
       content: StatefulBuilder(
         builder: (ctx, setDialogState) => SingleChildScrollView(
           child: Column(
@@ -1478,8 +1478,8 @@ Future<bool?> _showLogMedicationDialog() async {
               TextField(
                 controller: medNameController,
                 decoration: const InputDecoration(
-                  labelText: 'Medication Name *',
-                  hintText: 'e.g., Aspirin',
+                  labelText: 'Assignment Name *',
+                  hintText: 'e.g., Calculus Problem Set',
                   filled: true,
                   fillColor: Color(0xFFF3F6F8),
                   border: OutlineInputBorder(
@@ -1494,8 +1494,8 @@ Future<bool?> _showLogMedicationDialog() async {
               TextField(
                 controller: dosageController,
                 decoration: const InputDecoration(
-                  labelText: 'Dosage *',
-                  hintText: 'e.g., 500mg',
+                    labelText: 'Subject *',
+                    hintText: 'e.g., MATH 201',
                   filled: true,
                   fillColor: Color(0xFFF3F6F8),
                   border: OutlineInputBorder(
@@ -1522,7 +1522,7 @@ Future<bool?> _showLogMedicationDialog() async {
                         const Icon(Icons.access_time, size: 20, color: Colors.grey),
                         const SizedBox(width: 8),
                         const Text(
-                          'Time Taken',
+                      'Time Completed',
                           style: TextStyle(fontWeight: FontWeight.w600),
                         ),
                       ],
@@ -1604,7 +1604,7 @@ Future<bool?> _showLogMedicationDialog() async {
                 maxLines: 3,
                 decoration: const InputDecoration(
                   labelText: 'Notes (Optional)',
-                  hintText: 'Any side effects or additional info...',
+                  hintText: 'Any additional details...',
                   filled: true,
                   fillColor: Color(0xFFF3F6F8),
                   border: OutlineInputBorder(
@@ -1660,7 +1660,7 @@ Future<bool?> _showLogMedicationDialog() async {
                       children: [
                         CircularProgressIndicator(),
                         SizedBox(height: 16),
-                        Text('Saving medication...'),
+                      Text('Saving assignment...'),
                       ],
                     ),
                   ),
@@ -1795,7 +1795,7 @@ Future<bool> logMoodToBackend({
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Mood saved'),
+            content: Text('Study session logged.'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 2),
           ),
@@ -1863,7 +1863,7 @@ Future<bool> logMedicationToBackend({
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Medication saved '),
+              content: Text('Assignment saved.'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 2),
           ),
@@ -2019,7 +2019,7 @@ Future<bool> saveAppointmentToBackend({
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Appointment saved.'),
+            content: Text('Study session saved.'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 2),
           ),

@@ -45,7 +45,7 @@ class Appointment {
 }
 
 // Shared storage key for appointments (used by helper dialog and page)
-const String _appointmentsStorageKey = 'aura_appointments';
+const String _appointmentsStorageKey = 'scholarsync_sessions';
 
 // Notifier to tell other pages (Home) that appointments changed.
 final ValueNotifier<int> appointmentsNotifier = ValueNotifier<int>(0);
@@ -86,7 +86,7 @@ Future<bool?> showScheduleAppointmentDialog(BuildContext context, {Appointment? 
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Appointment Title', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
+                        TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Session Title', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
                         const SizedBox(height: 12),
                         Row(
                           children: [
@@ -114,7 +114,7 @@ Future<bool?> showScheduleAppointmentDialog(BuildContext context, {Appointment? 
                           ],
                         ),
                         const SizedBox(height: 12),
-                        const Text('Appointment Type', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                        const Text('Session Type', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
                         const SizedBox(height: 6),
                         Builder(builder: (fieldContext) {
                           final fieldKey = GlobalKey();
@@ -170,7 +170,7 @@ Future<bool?> showScheduleAppointmentDialog(BuildContext context, {Appointment? 
                           );
                         }),
                         const SizedBox(height: 12),
-                        TextField(controller: TextEditingController(text: provider), onChanged: (v) => provider = v, decoration: const InputDecoration(labelText: 'Healthcare Provider', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
+                        TextField(controller: TextEditingController(text: provider), onChanged: (v) => provider = v, decoration: const InputDecoration(labelText: 'Professor / Tutor', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
                         const SizedBox(height: 12),
                         TextField(controller: TextEditingController(text: location), onChanged: (v) => location = v, decoration: const InputDecoration(labelText: 'Location', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
                         const SizedBox(height: 12),
@@ -191,7 +191,7 @@ Future<bool?> showScheduleAppointmentDialog(BuildContext context, {Appointment? 
                     onPressed: () async {
                       if (selectedDate != null && selectedTime != null) {
                         final dt = DateTime(selectedDate!.year, selectedDate!.month, selectedDate!.day, selectedTime!.hour, selectedTime!.minute);
-                        final apptTitle = titleCtrl.text.trim().isEmpty ? 'Appointment' : titleCtrl.text.trim();
+                        final apptTitle = titleCtrl.text.trim().isEmpty ? 'Study Session' : titleCtrl.text.trim();
                         
                         // Close dialog first
                         Navigator.pop(c, null);
@@ -281,8 +281,8 @@ Future<bool?> showScheduleAppointmentDialog(BuildContext context, {Appointment? 
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(backendSuccess 
-                                ? 'Appointment saved to database!' 
-                                : 'Appointment saved locally (backend unavailable)'),
+                                ? 'Session saved to database!' 
+                                  : 'Session saved locally (backend unavailable)'),
                               backgroundColor: backendSuccess ? Colors.green : Colors.orange,
                               duration: const Duration(seconds: 2),
                             ),
@@ -298,7 +298,7 @@ Future<bool?> showScheduleAppointmentDialog(BuildContext context, {Appointment? 
                       }
                     },
                     style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00796B), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                    child: Text(existing == null ? 'Schedule Appointment' : 'Update Appointment', style: const TextStyle(color: Colors.white)),
+                    child: Text(existing == null ? 'Schedule Session' : 'Update Study Session', style: const TextStyle(color: Colors.white)),
                   ),
                 ],
               ),
@@ -326,7 +326,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   final DateFormat _dateFmt = DateFormat.yMMMd();
   final DateFormat _timeFmt = DateFormat.jm();
 
-  static const _storageKey = 'aura_appointments';
+static const _storageKey = 'scholarsync_sessions';
 
   @override
   void initState() {
@@ -380,7 +380,7 @@ void _showScheduleDialog({Appointment? existing, int? index}) async {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(existing == null ? 'Schedule New Appointment' : 'Edit Appointment', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+              Text(existing == null ? 'Schedule New Study Session' : 'Edit Study Session', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
               const SizedBox(height: 12),
               StatefulBuilder(
                 builder: (dialogContext, setDialogState) {
@@ -388,7 +388,7 @@ void _showScheduleDialog({Appointment? existing, int? index}) async {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Appointment Title', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
+                        TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Study Session Title', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
                         const SizedBox(height: 12),
                         Row(
                           children: [
@@ -525,7 +525,7 @@ void _showScheduleDialog({Appointment? existing, int? index}) async {
                                   children: [
                                     CircularProgressIndicator(),
                                     SizedBox(height: 16),
-                                    Text('Saving appointment...'),
+                                    Text('Saving study session...'),
                                   ],
                                 ),
                               ),
@@ -642,8 +642,8 @@ void _showScheduleDialog({Appointment? existing, int? index}) async {
 
   void _confirmDelete(int index) async {
     final ok = await showDialog<bool?>(context: context, builder: (c) => AlertDialog(
-      title: const Text('Delete appointment'),
-      content: const Text('Are you sure you want to delete this appointment?'),
+        title: const Text('Delete appointment'),
+        content: const Text('Are you sure you want to delete this appointment?'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
         TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
@@ -667,17 +667,17 @@ void _showScheduleDialog({Appointment? existing, int? index}) async {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Appointments', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                const Text('Study Sessions', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
-                Text('Manage your healthcare appointments', style: TextStyle(color: Colors.grey[700])),
+                Text('Manage your study sessions and office hours', style: TextStyle(color: Colors.grey[700])),
               ],
             ),
             ElevatedButton.icon(
               onPressed: () => _showScheduleDialog(),
               icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text('Schedule Appointment', style: TextStyle(color: Colors.white)),
+              label: const Text('Schedule Session', style: TextStyle(color: Colors.white)),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.teal[600],
+                backgroundColor: const Color(0xFFFFC107),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -696,11 +696,11 @@ void _showScheduleDialog({Appointment? existing, int? index}) async {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.event_note, color: Colors.teal),
+                      const Icon(Icons.event_note, color: Color(0xFFFFC107)),
                       const SizedBox(width: 8),
-                      const Text('Upcoming Appointments', style: TextStyle(fontWeight: FontWeight.bold)),
+                      const Text('Upcoming Sessions', style: TextStyle(fontWeight: FontWeight.bold)),
                       const SizedBox(width: 8),
-                      Text('${_appointments.length} appointments scheduled', style: TextStyle(color: Colors.grey[700])),
+                      Text('${_appointments.length} sessions scheduled', style: TextStyle(color: Colors.grey[700])),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -712,9 +712,9 @@ void _showScheduleDialog({Appointment? existing, int? index}) async {
                               children: [
                                 Icon(Icons.calendar_today, size: 48, color: Colors.teal[300]),
                                 const SizedBox(height: 12),
-                                const Text('No upcoming appointments', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                const Text('No upcoming study sessions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                                 const SizedBox(height: 8),
-                                Text('You don\'t have any appointments yet. Tap "Schedule Appointment" to create your first one.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[700])),
+                                Text('You don\'t have any sessions yet. Tap "Schedule Session" to create your first one.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[700])),
                               ],
                             ),
                           )
@@ -736,7 +736,7 @@ void _showScheduleDialog({Appointment? existing, int? index}) async {
                                                   children: [
                                                     Text(a.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                                                     const SizedBox(width: 8),
-                                                    Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(6)), child: const Text('Upcoming', style: TextStyle(color: Colors.blue))),
+                                                    Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Color(0xFFFFF8E1), borderRadius: BorderRadius.circular(6)), child: const Text('Upcoming', style: TextStyle(color: Color(0xFFFFC107)))),
                                                   ],
                                                 ),
                                         Row(

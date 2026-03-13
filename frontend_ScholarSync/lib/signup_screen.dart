@@ -17,15 +17,15 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _isLoading = false;
   bool _isPassVisible = false;
 
-  // ── ScholarSync Colors ──────────────────────────
-  static const Color _primary         = Color(0xFFFFC107);
-  static const Color _background      = Color(0xFFF5F5F5);
-  static const Color _surface         = Color(0xFFFFFFFF);
-  static const Color _foreground      = Color(0xFF1A1A1A);
-  static const Color _muted           = Color(0xFFE8E8E8);
-  static const Color _mutedForeground = Color(0xFF5A5A4D);
-  static const Color _border          = Color(0xFFE0E0E0);
-  // ───────────────────────────────────────────────
+// ── ScholarSync Theme ───────────────────────────
+static const Color _primary         = Color(0xFFFFC107); // Amber - keep
+static const Color _background      = Color(0xFF1A1A1A); // Dark page bg ← CHANGED
+static const Color _surface         = Color(0xFFFFFFFF); // White card ← BACK TO WHITE
+static const Color _foreground      = Color(0xFF1A1A1A); // Dark text on card ← BACK TO DARK
+static const Color _muted           = Color(0xFFE8E8E8); // Light input bg ← BACK TO LIGHT
+static const Color _mutedForeground = Color(0xFF5A5A4D); // Muted text ← BACK TO LIGHT
+static const Color _border          = Color(0xFFE0E0E0); // Light border ← BACK TO LIGHT
+// ───────────────────────────────────────────────
 
   @override
   void dispose() {
@@ -100,27 +100,27 @@ class _SignupScreenState extends State<SignupScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Icon
                     Container(
                       padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(color: _primary.withOpacity(0.12), shape: BoxShape.circle),
+                      decoration: BoxDecoration(color: _primary.withOpacity(0.15), shape: BoxShape.circle),
                       child: const Icon(Icons.school, color: _primary, size: 36),
                     ),
                     const SizedBox(height: 16),
-                    const Text('ScholarSync', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: _foreground)),
+                    const Text('ScholarSync', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: _primary)),
                     const SizedBox(height: 8),
                     const Text('Create your secure account', textAlign: TextAlign.center, style: TextStyle(color: _mutedForeground)),
                     const SizedBox(height: 20),
 
-                    TextField(controller: _usernameCtrl, decoration: _inputDecoration('Username')),
+                    TextField(controller: _usernameCtrl, style: const TextStyle(color: _foreground), decoration: _inputDecoration('Username')),
                     const SizedBox(height: 16),
-                    TextField(controller: _emailCtrl, keyboardType: TextInputType.emailAddress, decoration: _inputDecoration('Email Address')),
+                    TextField(controller: _emailCtrl, style: const TextStyle(color: _foreground), keyboardType: TextInputType.emailAddress, decoration: _inputDecoration('Email Address')),
                     const SizedBox(height: 16),
-                    TextField(controller: _numberCtrl, keyboardType: TextInputType.phone, decoration: _inputDecoration('Phone Number')),
+                    TextField(controller: _numberCtrl, style: const TextStyle(color: _foreground), keyboardType: TextInputType.phone, decoration: _inputDecoration('Phone Number')),
                     const SizedBox(height: 16),
                     TextField(
                       controller: _passCtrl,
                       obscureText: !_isPassVisible,
+                      style: const TextStyle(color: _foreground),
                       decoration: _inputDecoration('Password').copyWith(
                         suffixIcon: IconButton(
                           icon: Icon(_isPassVisible ? Icons.visibility : Icons.visibility_off, color: _mutedForeground),
@@ -129,7 +129,7 @@ class _SignupScreenState extends State<SignupScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    TextField(controller: _confirmCtrl, obscureText: !_isPassVisible, decoration: _inputDecoration('Confirm Password')),
+                    TextField(controller: _confirmCtrl, obscureText: !_isPassVisible, style: const TextStyle(color: _foreground), decoration: _inputDecoration('Confirm Password')),
                     const SizedBox(height: 24),
 
                     SizedBox(
@@ -138,7 +138,9 @@ class _SignupScreenState extends State<SignupScreen> {
                         onPressed: _isLoading ? null : _submit,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _primary,
-                          foregroundColor: _foreground,
+                          foregroundColor: const Color(0xFF1A1A1A),
+                          disabledBackgroundColor: _muted,
+                          disabledForegroundColor: _mutedForeground,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
@@ -154,7 +156,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         text: 'Already have an account? ',
                         style: const TextStyle(color: _mutedForeground),
                         children: [
-                          TextSpan(text: 'Sign in', style: TextStyle(color: _primary.withOpacity(0.9), fontWeight: FontWeight.bold)),
+                          const TextSpan(text: 'Sign in', style: TextStyle(color: _primary, fontWeight: FontWeight.bold)),
                         ],
                       )),
                     ),
