@@ -1,0 +1,40 @@
+name: scholarsync
+description: "ScholarSync - Student wellness and productivity app."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # UI and Core Utilities
+  cupertino_icons: ^1.0.8
+  flutter_svg: ^1.1.1
+  intl: ^0.17.0
+
+  # Storage and Encryption
+  shared_preferences: ^2.2.0
+  path_provider: ^2.1.1
+  encrypt: ^5.0.1
+  uuid: ^3.0.7
+
+  # Network and Sharing
+  http: ^1.2.1
+  url_launcher: ^6.3.0
+  crypto: ^3.0.2
+  qr_flutter: ^4.1.0
+  share_plus: ^10.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/icons/
