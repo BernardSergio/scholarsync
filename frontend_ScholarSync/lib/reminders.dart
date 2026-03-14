@@ -436,7 +436,7 @@ Future<void> _loadReminders() async {
                 TextField(
                   controller: medCtrl,
                   decoration: const InputDecoration(
-                    labelText: 'Medication name',
+                    labelText: 'Assignment name',
                     filled: true,
                     fillColor: Color(0xFFF3F6F8),
                     border: OutlineInputBorder(
@@ -448,7 +448,7 @@ Future<void> _loadReminders() async {
                 TextField(
                   controller: doseCtrl,
                   decoration: const InputDecoration(
-                    labelText: 'Dosage',
+                    labelText: 'Subject / Course',
                     filled: true,
                     fillColor: Color(0xFFF3F6F8),
                     border: OutlineInputBorder(
@@ -565,7 +565,7 @@ Future<void> _loadReminders() async {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Please enter medication name and dosage'),
+                    content: Text('Please enter assignment name and subject'),
                       ),
                     );
                   }

@@ -297,7 +297,7 @@ Future<bool?> showScheduleAppointmentDialog(BuildContext context, {Appointment? 
                         }
                       }
                     },
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00796B), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFC107), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                     child: Text(existing == null ? 'Schedule Session' : 'Update Study Session', style: const TextStyle(color: Colors.white)),
                   ),
                 ],
@@ -445,9 +445,9 @@ void _showScheduleDialog({Appointment? existing, int? index}) async {
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                   color: Colors.white,
                                   items: [
-                                    PopupMenuItem(value: 'In Person', child: SizedBox(width: w, child: Row(children: [const Icon(Icons.location_on, size: 18), const SizedBox(width: 8), const Expanded(child: Text('In-Person')), if (apptType == 'In Person') const Icon(Icons.check, color: Color(0xFF00796B))]))),
-                                    PopupMenuItem(value: 'Video Call', child: SizedBox(width: w, child: Row(children: [const Icon(Icons.videocam, size: 18), const SizedBox(width: 8), const Expanded(child: Text('Video Call')), if (apptType == 'Video Call') const Icon(Icons.check, color: Color(0xFF00796B))]))),
-                                    PopupMenuItem(value: 'Phone Call', child: SizedBox(width: w, child: Row(children: [const Icon(Icons.phone, size: 18), const SizedBox(width: 8), const Expanded(child: Text('Phone Call')), if (apptType == 'Phone Call') const Icon(Icons.check, color: Color(0xFF00796B))]))),
+                                    PopupMenuItem(value: 'In Person', child: SizedBox(width: w, child: Row(children: [const Icon(Icons.location_on, size: 18), const SizedBox(width: 8), const Expanded(child: Text('In-Person')), if (apptType == 'In Person') const Icon(Icons.check, color: Color(0xFFFFC107))]))),
+                                    PopupMenuItem(value: 'Video Call', child: SizedBox(width: w, child: Row(children: [const Icon(Icons.videocam, size: 18), const SizedBox(width: 8), const Expanded(child: Text('Video Call')), if (apptType == 'Video Call') const Icon(Icons.check, color: Color(0xFFFFC107))]))),
+                                    PopupMenuItem(value: 'Phone Call', child: SizedBox(width: w, child: Row(children: [const Icon(Icons.phone, size: 18), const SizedBox(width: 8), const Expanded(child: Text('Phone Call')), if (apptType == 'Phone Call') const Icon(Icons.check, color: Color(0xFFFFC107))]))),
                                   ],
                                 );
 
@@ -478,7 +478,7 @@ void _showScheduleDialog({Appointment? existing, int? index}) async {
                           );
                         }),
                         const SizedBox(height: 12),
-                        TextField(controller: TextEditingController(text: provider), onChanged: (v) => provider = v, decoration: const InputDecoration(labelText: 'Healthcare Provider', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
+                        TextField(controller: TextEditingController(text: provider), onChanged: (v) => provider = v, decoration: const InputDecoration(labelText: 'Professor / Tutor', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
                         const SizedBox(height: 12),
                         TextField(controller: TextEditingController(text: location), onChanged: (v) => location = v, decoration: const InputDecoration(labelText: 'Location', filled: true, fillColor: Color(0xFFF3F6F8), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))))),
                         const SizedBox(height: 12),
@@ -496,8 +496,8 @@ void _showScheduleDialog({Appointment? existing, int? index}) async {
                   OutlinedButton(
                     onPressed: () => Navigator.pop(c, false),
                     style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFF00796B)),
-                      foregroundColor: const Color(0xFF00796B),
+                    side: const BorderSide(color: Color(0xFFFFC107)),
+                      foregroundColor: const Color(0xFFFFC107),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     child: const Text('Cancel'),

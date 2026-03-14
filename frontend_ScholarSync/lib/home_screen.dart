@@ -503,7 +503,7 @@ Future<void> _loadTodaysReminders() async {
                 icon: const Icon(Icons.calendar_today),
                 label: const Text('Schedule Study Session'),
                 onPressed: () => _logActivity('Study session scheduled', 'You scheduled your first study session', Icons.calendar_today, const Color(0xFFFFC107)),
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3A3A35)),
+                style: ElevatedButton.styleFrom(backgroundColor: const Color.fromARGB(255, 159, 159, 125)),
                   ),
               ],
             ),
